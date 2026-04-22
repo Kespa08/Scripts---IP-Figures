@@ -218,6 +218,10 @@
             dlg.spacing       = 12;
             dlg.margins       = [18, 18, 18, 18];
 
+            var _screenH = $.screens[0].height;
+            var _dlgH    = Math.round(_screenH * 0.70);
+            dlg.preferredSize = [-1, _dlgH];
+
             // ---- Diagram Name -------------------------------
             var titlePanel = dlg.add("panel", undefined, "Diagram Name");
             titlePanel.orientation   = "row";
@@ -242,114 +246,6 @@
             var rbS4 = scalePanel.add("radiobutton", undefined, "S4");
             rbS1.value = true;
 
-            // ---- Steps Panel (S1/S2/S3) ----------------------
-            var stepsPanel = dlg.add("panel", undefined, "Flowchart Steps");
-            stepsPanel.orientation   = "column";
-            stepsPanel.alignChildren = ["fill", "top"];
-            stepsPanel.spacing       = 6;
-            stepsPanel.margins       = [10, 18, 10, 10];
-
-            var rowContainer = stepsPanel.add("group");
-            rowContainer.orientation   = "column";
-            rowContainer.alignChildren = ["fill", "top"];
-            rowContainer.spacing       = 5;
-
-            var rows = [];
-
-            // --------------------------------------------------
-            // BUG B + C FIX: relayout()
-            // Wraps every layout call to:
-            //   1. Save the window's screen position before layout
-            //      (layout(true) re-centers the window as a side
-            //      effect, causing the visible "jump").
-            //   2. Call layout(true) to reflow element positions.
-            //   3. Restore the saved screen position.
-            //   4. Call dlg.update() to force a paint pass
-            //      (layout pass alone does not repaint controls,
-            //      leaving dynamically added edittexts invisible).
-            // --------------------------------------------------
-            function relayout() {
-                var loc = [dlg.location[0], dlg.location[1]];
-                dlg.layout.layout(true);
-                dlg.location = loc;
-                dlg.update();
-            }
-
-            function reindexRows() {
-                for (var i = 0; i < rows.length; i++) {
-                    rows[i].indexLabel.text = (i + 1) + ".";
-                }
-            }
-
-            function addRow(prefillText) {
-                var row = rowContainer.add("group");
-                row.orientation   = "row";
-                row.alignChildren = ["left", "top"]; // top-align number label with tall field
-                row.spacing       = 6;
-
-                var lbl = row.add("statictext", undefined, (rows.length + 1) + ".");
-                lbl.minimumSize = [22, 20];
-
-                // Multiline: Enter produces \r (hard paragraph break in InDesign).
-                // ScriptUI cannot distinguish Enter from Shift+Enter so all
-                // breaks become paragraph breaks -- correct for style detection.
-                var input = row.add("edittext", undefined, prefillText || "", { multiline: true });
-                input.minimumSize = [290, 72]; // tall enough for ~3-4 lines
-                input.maximumSize = [290, 72];
-
-                var removeBtn = row.add("button", undefined, "x");
-                removeBtn.minimumSize = [26, 22];
-                removeBtn.maximumSize = [26, 22];
-                removeBtn.helpTip     = "Remove this step";
-
-                var rowObj = { group: row, inputField: input, indexLabel: lbl };
-
-                removeBtn.onClick = function () {
-                    if (rows.length === 1) {
-                        input.text = "";
-                        return;
-                    }
-                    rowContainer.remove(row);
-                    var idx = -1;
-                    for (var k = 0; k < rows.length; k++) {
-                        if (rows[k] === rowObj) { idx = k; break; }
-                    }
-                    if (idx !== -1) { rows.splice(idx, 1); }
-                    reindexRows();
-                    relayout(); // BUG B+C FIX
-                };
-
-                rows.push(rowObj);
-                return rowObj;
-            }
-
-            function populateRows(values) {
-                for (var i = rows.length - 1; i >= 0; i--) {
-                    rowContainer.remove(rows[i].group);
-                }
-                rows.length = 0;
-
-                for (var j = 0; j < values.length; j++) {
-                    addRow(values[j]);
-                }
-                if (rows.length === 0) { addRow(); }
-
-                relayout(); // BUG B+C FIX: replaces bare layout(true) call
-            }
-
-            // One blank row to start
-            addRow();
-
-            // ---- Add Step Button ----------------------------
-            var addStepBtn = stepsPanel.add("button", undefined, "+ Add Step");
-            addStepBtn.alignment   = ["left", "center"];
-            addStepBtn.minimumSize = [100, 24];
-
-            addStepBtn.onClick = function () {
-                addRow();
-                relayout();
-            };
-
             // ================================================================
             // S4 PANEL — shown only when rbS4 is selected
             // Contains: T1/T2 header inputs + dual-field step rows
@@ -360,6 +256,7 @@
             s4Panel.spacing       = 8;
             s4Panel.margins       = [10, 18, 10, 10];
             s4Panel.visible       = false; // hidden until S4 selected
+            s4Panel.minimumSize   = [0, 0]; // collapse initially so stepsPanel sits at top
 
             // ---- S4 header inputs (T1, T2) ------------------
             var s4HeaderGroup = s4Panel.add("group");
@@ -417,8 +314,8 @@
                 titleGroup.spacing       = 2;
                 titleGroup.add("statictext", undefined, "Title");
                 var titleField = titleGroup.add("edittext", undefined, prefillTitle || "", { multiline: true });
-                titleField.minimumSize = [135, 52];
-                titleField.maximumSize = [135, 52];
+                titleField.minimumSize = [135, 46];
+                titleField.maximumSize = [135, 46];
 
                 // Body sub-group (label + field)
                 var bodyGroup = row.add("group");
@@ -427,8 +324,8 @@
                 bodyGroup.spacing       = 2;
                 bodyGroup.add("statictext", undefined, "Body");
                 var bodyField = bodyGroup.add("edittext", undefined, prefillBody || "", { multiline: true });
-                bodyField.minimumSize = [135, 52];
-                bodyField.maximumSize = [135, 52];
+                bodyField.minimumSize = [135, 46];
+                bodyField.maximumSize = [135, 46];
 
                 var removeBtn = row.add("button", undefined, "x");
                 removeBtn.minimumSize = [26, 22];
@@ -477,17 +374,136 @@
             addS4StepBtn.minimumSize = [100, 24];
             addS4StepBtn.onClick = function () { addRowS4(); relayout(); };
 
-            // ---- Radio button onChange: swap panels ----------
-            function onScaleChange() {
-                var isS4 = rbS4.value;
-                stepsPanel.visible = !isS4;
-                s4Panel.visible    =  isS4;
-                relayout();
+            // ---- Steps Panel (S1/S2/S3) ----------------------
+            var stepsPanel = dlg.add("panel", undefined, "Flowchart Steps");
+            stepsPanel.orientation   = "column";
+            stepsPanel.alignChildren = ["fill", "top"];
+            stepsPanel.spacing       = 6;
+            stepsPanel.margins       = [10, 18, 10, 10];
+
+            var rowContainer = stepsPanel.add("group");
+            rowContainer.orientation   = "column";
+            rowContainer.alignChildren = ["fill", "top"];
+            rowContainer.spacing       = 5;
+
+            var rows = [];
+
+            // --------------------------------------------------
+            // BUG B + C FIX: relayout()
+            // Wraps every layout call to:
+            //   1. Save the window's screen position before layout
+            //      (layout(true) re-centers the window as a side
+            //      effect, causing the visible "jump").
+            //   2. Call layout(true) to reflow element positions.
+            //   3. Restore the saved screen position.
+            //   4. Call dlg.update() to force a paint pass
+            //      (layout pass alone does not repaint controls,
+            //      leaving dynamically added edittexts invisible).
+            // --------------------------------------------------
+            function relayout() {
+                var loc = [dlg.location[0], dlg.location[1]];
+                dlg.layout.layout(true);
+                dlg.location = loc;
+                dlg.update();
             }
-            rbS1.onClick = onScaleChange;
-            rbS2.onClick = onScaleChange;
-            rbS3.onClick = onScaleChange;
-            rbS4.onClick = onScaleChange;
+
+            function reindexRows() {
+                for (var i = 0; i < rows.length; i++) {
+                    rows[i].indexLabel.text = (i + 1) + ".";
+                }
+            }
+
+            function addRow(prefillText) {
+                var row = rowContainer.add("group");
+                row.orientation   = "row";
+                row.alignChildren = ["left", "top"]; // top-align number label with tall field
+                row.spacing       = 6;
+
+                var lbl = row.add("statictext", undefined, (rows.length + 1) + ".");
+                lbl.minimumSize = [22, 20];
+
+                // Multiline: Enter produces \r (hard paragraph break in InDesign).
+                // ScriptUI cannot distinguish Enter from Shift+Enter so all
+                // breaks become paragraph breaks -- correct for style detection.
+                var input = row.add("edittext", undefined, prefillText || "", { multiline: true });
+                input.minimumSize = [290, 46];
+                input.maximumSize = [290, 46];
+
+                var removeBtn = row.add("button", undefined, "x");
+                removeBtn.minimumSize = [26, 22];
+                removeBtn.maximumSize = [26, 22];
+                removeBtn.helpTip     = "Remove this step";
+
+                var rowObj = { group: row, inputField: input, indexLabel: lbl };
+
+                removeBtn.onClick = function () {
+                    if (rows.length === 1) {
+                        input.text = "";
+                        return;
+                    }
+                    rowContainer.remove(row);
+                    var idx = -1;
+                    for (var k = 0; k < rows.length; k++) {
+                        if (rows[k] === rowObj) { idx = k; break; }
+                    }
+                    if (idx !== -1) { rows.splice(idx, 1); }
+                    reindexRows();
+                    relayout(); // BUG B+C FIX
+                };
+
+                rows.push(rowObj);
+                return rowObj;
+            }
+
+            function populateRows(values) {
+                for (var i = rows.length - 1; i >= 0; i--) {
+                    rowContainer.remove(rows[i].group);
+                }
+                rows.length = 0;
+
+                for (var j = 0; j < values.length; j++) {
+                    addRow(values[j]);
+                }
+                if (rows.length === 0) { addRow(); }
+
+                relayout(); // BUG B+C FIX: replaces bare layout(true) call
+            }
+
+            // One blank row to start
+            addRow();
+
+            // ---- Add Step Button ----------------------------
+            var addStepBtn = stepsPanel.add("button", undefined, "+ Add Step");
+            addStepBtn.alignment   = ["left", "center"];
+            addStepBtn.minimumSize = [100, 24];
+
+            addStepBtn.onClick = function () {
+                addRow();
+                relayout();
+            };
+
+            // ---- Radio button onClick: swap panels + track scale ----
+            var currentScale = "S1";
+            function onScaleChange(newScale) {
+                return function () {
+                    currentScale = newScale;
+                    var isS4 = (newScale === "S4");
+                    stepsPanel.visible = !isS4;
+                    s4Panel.visible    =  isS4;
+                    if (isS4) {
+                        stepsPanel.minimumSize = [0, 0];
+                        s4Panel.minimumSize    = [-1, -1];
+                    } else {
+                        s4Panel.minimumSize    = [0, 0];
+                        stepsPanel.minimumSize = [-1, -1];
+                    }
+                    relayout();
+                };
+            }
+            rbS1.onClick = onScaleChange("S1");
+            rbS2.onClick = onScaleChange("S2");
+            rbS3.onClick = onScaleChange("S3");
+            rbS4.onClick = onScaleChange("S4");
 
             // ---- Bottom Buttons -----------------------------
             var bottomGroup = dlg.add("group");
@@ -517,7 +533,7 @@
                 );
                 if (!file) { return; }
 
-                if (rbS4.value) {
+                if (currentScale === "S4") {
                     var s4Steps = parseCSVS4(file);
                     if (s4Steps.length === 0) {
                         alert("CSV contained no readable steps.\nExpected two columns: Title, Body.");
@@ -544,7 +560,7 @@
 
             // ---- OK -----------------------------------------
             okBtn.onClick = function () {
-                var selectedScale = rbS1.value ? "S1" : rbS2.value ? "S2" : rbS3.value ? "S3" : "S4";
+                var selectedScale = currentScale;
 
                 var workingPage = resolveWorkingPage(doc, selectedScale);
                 if (!workingPage) { return; }
@@ -1286,9 +1302,17 @@
                 bodyBottom = placeChildFrame(bodyFrame, currentTop, step.body, scaleNum, doc);
             }
 
-            // Outer frame grows to the taller child
-            var outerB      = newTB.geometricBounds;
+            // Equalize both child frames to the tallest child's bottom
             var outerBottom = Math.max(titleBottom, bodyBottom);
+            if (titleFrame) {
+                var tB = titleFrame.geometricBounds;
+                titleFrame.geometricBounds = [tB[0], tB[1], outerBottom, tB[3]];
+            }
+            if (bodyFrame) {
+                var bB = bodyFrame.geometricBounds;
+                bodyFrame.geometricBounds = [bB[0], bB[1], outerBottom, bB[3]];
+            }
+            var outerB = newTB.geometricBounds;
             newTB.geometricBounds = [outerB[0], outerB[1], outerBottom, outerB[3]];
 
             return outerBottom;
