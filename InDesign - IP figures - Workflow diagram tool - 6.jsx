@@ -273,7 +273,6 @@
             s4Container.spacing       = 0;
             s4Container.margins       = [0, 0, 0, 0];
             s4Container.visible       = false;
-            s4Container.maximumSize   = [-1, 0]; // force height = 0 while hidden
 
             var s4Panel = s4Container.add("panel", undefined, "S4 Flowchart Steps");
             s4Panel.orientation   = "column";
@@ -517,10 +516,8 @@
                 return function () {
                     currentScale = newScale;
                     var isS4 = (newScale === "S4");
-                    stepsContainer.visible    = !isS4;
-                    s4Container.visible       =  isS4;
-                    stepsContainer.maximumSize = isS4 ? [-1, 0] : [-1, -1];
-                    s4Container.maximumSize    = isS4 ? [-1, -1] : [-1, 0];
+                    stepsContainer.visible = !isS4;
+                    s4Container.visible    =  isS4;
                     relayout();
                 };
             }
@@ -1365,7 +1362,7 @@
 
             // --- Override master items so locked items become editable ---
             if (!docError) {
-                try { result.workingPage.overrideAllMasterPageItems(); } catch (e) {}
+                try { result.workingPage.parent.overrideAllMasterPageItems(); } catch (e) {}
             }
 
             // --- Phase 2: Template object detection ---
