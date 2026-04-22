@@ -49,16 +49,32 @@
             return false;
         }
 
+        function findMasterByName(doc, scalePrefix) {
+            for (var i = 0; i < doc.masterSpreads.length; i++) {
+                try {
+                    if (doc.masterSpreads[i].name.indexOf(scalePrefix) !== -1) {
+                        return doc.masterSpreads[i];
+                    }
+                } catch (e) {}
+            }
+            return null;
+        }
+
         function resolveWorkingPage(doc, scalePrefix) {
             var pages = getPagesWithMaster(doc, scalePrefix);
 
             if (pages.length === 0) {
-                alert(
-                    "No page found with a master containing \"" + scalePrefix + "\" applied.\n\n" +
-                    "Please ensure the document has at least one page with the " +
-                    scalePrefix + " parent spread applied before running this script."
-                );
-                return null;
+                var master = findMasterByName(doc, scalePrefix);
+                if (!master) {
+                    alert(
+                        "No master spread containing \"" + scalePrefix + "\" found in this document.\n\n" +
+                        "Please add a master spread with \"" + scalePrefix + "\" in its name."
+                    );
+                    return null;
+                }
+                var autoPage = doc.pages.add(LocationOptions.AT_END);
+                autoPage.appliedMaster = master;
+                return autoPage;
             }
 
             var masterToApply = pages[0].appliedMaster;
@@ -250,13 +266,20 @@
             // S4 PANEL — shown only when rbS4 is selected
             // Contains: T1/T2 header inputs + dual-field step rows
             // ================================================================
-            var s4Panel = dlg.add("panel", undefined, "S4 Flowchart Steps");
+            // Group wrapper allows true collapse (panels retain chrome height even when invisible)
+            var s4Container = dlg.add("group");
+            s4Container.orientation   = "column";
+            s4Container.alignChildren = ["fill", "top"];
+            s4Container.spacing       = 0;
+            s4Container.margins       = [0, 0, 0, 0];
+            s4Container.visible       = false;
+            s4Container.maximumSize   = [-1, 0]; // force height = 0 while hidden
+
+            var s4Panel = s4Container.add("panel", undefined, "S4 Flowchart Steps");
             s4Panel.orientation   = "column";
             s4Panel.alignChildren = ["fill", "top"];
             s4Panel.spacing       = 8;
             s4Panel.margins       = [10, 18, 10, 10];
-            s4Panel.visible       = false; // hidden until S4 selected
-            s4Panel.minimumSize   = [0, 0]; // collapse initially so stepsPanel sits at top
 
             // ---- S4 header inputs (T1, T2) ------------------
             var s4HeaderGroup = s4Panel.add("group");
@@ -375,7 +398,13 @@
             addS4StepBtn.onClick = function () { addRowS4(); relayout(); };
 
             // ---- Steps Panel (S1/S2/S3) ----------------------
-            var stepsPanel = dlg.add("panel", undefined, "Flowchart Steps");
+            var stepsContainer = dlg.add("group");
+            stepsContainer.orientation   = "column";
+            stepsContainer.alignChildren = ["fill", "top"];
+            stepsContainer.spacing       = 0;
+            stepsContainer.margins       = [0, 0, 0, 0];
+
+            var stepsPanel = stepsContainer.add("panel", undefined, "Flowchart Steps");
             stepsPanel.orientation   = "column";
             stepsPanel.alignChildren = ["fill", "top"];
             stepsPanel.spacing       = 6;
@@ -488,15 +517,10 @@
                 return function () {
                     currentScale = newScale;
                     var isS4 = (newScale === "S4");
-                    stepsPanel.visible = !isS4;
-                    s4Panel.visible    =  isS4;
-                    if (isS4) {
-                        stepsPanel.minimumSize = [0, 0];
-                        s4Panel.minimumSize    = [-1, -1];
-                    } else {
-                        s4Panel.minimumSize    = [0, 0];
-                        stepsPanel.minimumSize = [-1, -1];
-                    }
+                    stepsContainer.visible    = !isS4;
+                    s4Container.visible       =  isS4;
+                    stepsContainer.maximumSize = isS4 ? [-1, 0] : [-1, -1];
+                    s4Container.maximumSize    = isS4 ? [-1, -1] : [-1, 0];
                     relayout();
                 };
             }
@@ -1338,6 +1362,11 @@
             // --- Phase 1: Dialog + page resolution ---
             var result = buildDialog(doc);
             if (!result) { docError = true; } // user cancelled
+
+            // --- Override master items so locked items become editable ---
+            if (!docError) {
+                try { result.workingPage.overrideAllMasterPageItems(); } catch (e) {}
+            }
 
             // --- Phase 2: Template object detection ---
             if (!docError) {
