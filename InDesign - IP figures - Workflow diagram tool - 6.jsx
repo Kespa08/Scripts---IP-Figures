@@ -1390,9 +1390,9 @@
                     }
                 } catch (e) {}
                 alert(
-                    "Could not detect a flowchart scale (S1/S2/S3/S4) from the active page’s master." +
+                    "Could not detect a relevant master-page (S1/S2/S3/S4) applied to the active page." +
                     _masterInfo +
-                    "\n\nNavigate to a page with a flowchart master applied and run the script again."
+                    "\n\nEnsure relevant master-page is applied and run the script again."
                 );
                 docError = true;
             }
