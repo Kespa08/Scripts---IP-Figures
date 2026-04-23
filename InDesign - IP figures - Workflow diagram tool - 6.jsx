@@ -1159,35 +1159,42 @@
                 }
             }
 
-            // Hide the original template text box so it doesn't show beneath the
-            // constructed layout. For local items: remove() is safe. For master
-            // items: override onto this page and set visible=false — remove()
-            // on a local override restores the master item's appearance.
+            // Remove the original template text box. detach() breaks the master
+            // association first so that remove() permanently deletes the item
+            // rather than restoring the master ghost.
             try {
                 if (tbTemplate.parentPage === workingPage) {
+                    try { tbTemplate.detach(); } catch (e2) {}
                     tbTemplate.remove();
-                    log.push("\n(Template textbox removed from working page)");
+                    log.push("\n(Template textbox removed)");
                 } else {
                     var tbOverride = tbTemplate.override(workingPage);
-                    if (tbOverride) { tbOverride.visible = false; }
-                    log.push("\n(Template textbox master override hidden)");
+                    if (tbOverride) {
+                        try { tbOverride.detach(); } catch (e2) {}
+                        tbOverride.remove();
+                    }
+                    log.push("\n(Template textbox master item removed)");
                 }
             } catch (e) {
-                log.push("\n(Warning: could not hide template textbox: " + e.message + ")");
+                log.push("\n(Warning: could not remove template textbox: " + e.message + ")");
             }
 
             // Same treatment for the template arrow.
             try {
                 if (arTemplate.parentPage === workingPage) {
+                    try { arTemplate.detach(); } catch (e2) {}
                     arTemplate.remove();
-                    log.push("(Template arrow removed from working page)");
+                    log.push("(Template arrow removed)");
                 } else {
                     var arOverride = arTemplate.override(workingPage);
-                    if (arOverride) { arOverride.visible = false; }
-                    log.push("(Template arrow master override hidden)");
+                    if (arOverride) {
+                        try { arOverride.detach(); } catch (e2) {}
+                        arOverride.remove();
+                    }
+                    log.push("(Template arrow master item removed)");
                 }
             } catch (e) {
-                log.push("(Warning: could not hide template arrow: " + e.message + ")");
+                log.push("(Warning: could not remove template arrow: " + e.message + ")");
             }
 
             return log;
