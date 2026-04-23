@@ -1159,31 +1159,35 @@
                 }
             }
 
-            // Remove original template text box — would otherwise remain as
-            // an invisible empty frame overlapping Box 1.
-            // Guard: only remove if item lives on the working page, never
-            // if it is a master-page item.
+            // Hide the original template text box so it doesn't show beneath the
+            // constructed layout. For local items: remove() is safe. For master
+            // items: override onto this page and set visible=false — remove()
+            // on a local override restores the master item's appearance.
             try {
                 if (tbTemplate.parentPage === workingPage) {
                     tbTemplate.remove();
                     log.push("\n(Template textbox removed from working page)");
                 } else {
-                    log.push("\n(Template textbox is on master -- left untouched)");
+                    var tbOverride = tbTemplate.override(workingPage);
+                    if (tbOverride) { tbOverride.visible = false; }
+                    log.push("\n(Template textbox master override hidden)");
                 }
             } catch (e) {
-                log.push("\n(Warning: could not remove template textbox: " + e.message + ")");
+                log.push("\n(Warning: could not hide template textbox: " + e.message + ")");
             }
 
-            // Remove original template arrow — same rationale and same guard.
+            // Same treatment for the template arrow.
             try {
                 if (arTemplate.parentPage === workingPage) {
                     arTemplate.remove();
                     log.push("(Template arrow removed from working page)");
                 } else {
-                    log.push("(Template arrow is on master -- left untouched)");
+                    var arOverride = arTemplate.override(workingPage);
+                    if (arOverride) { arOverride.visible = false; }
+                    log.push("(Template arrow master override hidden)");
                 }
             } catch (e) {
-                log.push("(Warning: could not remove template arrow: " + e.message + ")");
+                log.push("(Warning: could not hide template arrow: " + e.message + ")");
             }
 
             return log;
