@@ -60,6 +60,19 @@
             return null;
         }
 
+        function detectScaleFromPage(page) {
+            try {
+                if (!page || !page.isValid) { return null; }
+                if (!page.appliedMaster || !page.appliedMaster.isValid) { return null; }
+                var name = page.appliedMaster.name;
+                var scales = ["S4", "S3", "S2", "S1"];
+                for (var i = 0; i < scales.length; i++) {
+                    if (name.indexOf(scales[i]) !== -1) { return scales[i]; }
+                }
+                return null;
+            } catch (e) { return null; }
+        }
+
         function resolveWorkingPage(doc, scalePrefix) {
             var pages = getPagesWithMaster(doc, scalePrefix);
 
@@ -223,7 +236,7 @@
         // =====================================================
         // DIALOG
         // =====================================================
-        function buildDialog(doc) {
+        function buildDialog(doc, activePage, detectedScale) {
 
             var result = null;
 
@@ -238,6 +251,17 @@
             var _dlgH    = Math.round(_screenH * 0.70);
             dlg.preferredSize = [-1, _dlgH];
 
+            // ---- Context info bar ---------------------------
+            var infoGroup = dlg.add("group");
+            infoGroup.orientation   = "row";
+            infoGroup.alignChildren = ["left", "center"];
+            infoGroup.margins       = [4, 0, 4, 0];
+            var infoText = infoGroup.add(
+                "statictext", undefined,
+                "Page: " + activePage.name + ",  Scale: " + detectedScale
+            );
+            infoText.minimumSize = [330, 20];
+
             // ---- Diagram Name -------------------------------
             var titlePanel = dlg.add("panel", undefined, "Diagram Name");
             titlePanel.orientation   = "row";
@@ -249,21 +273,8 @@
             titleInput.maximumSize = [330, 22];
             titleInput.helpTip     = "Replaces content of Title_Flowchart on the working page";
 
-            // ---- Scale Selection ----------------------------
-            var scalePanel = dlg.add("panel", undefined, "Artboard Scale");
-            scalePanel.orientation   = "row";
-            scalePanel.alignChildren = ["left", "center"];
-            scalePanel.spacing       = 30;
-            scalePanel.margins       = [14, 18, 14, 12];
-
-            var rbS1 = scalePanel.add("radiobutton", undefined, "S1");
-            var rbS2 = scalePanel.add("radiobutton", undefined, "S2");
-            var rbS3 = scalePanel.add("radiobutton", undefined, "S3");
-            var rbS4 = scalePanel.add("radiobutton", undefined, "S4");
-            rbS1.value = true;
-
             // ================================================================
-            // S4 PANEL — shown only when rbS4 is selected
+            // S4 PANEL — visible when detected scale is S4
             // Contains: T1/T2 header inputs + dual-field step rows
             // ================================================================
             // Group wrapper allows true collapse (panels retain chrome height even when invisible)
@@ -272,7 +283,7 @@
             s4Container.alignChildren = ["fill", "top"];
             s4Container.spacing       = 0;
             s4Container.margins       = [0, 0, 0, 0];
-            s4Container.visible       = false;
+            s4Container.visible       = (detectedScale === "S4");
 
             var s4Panel = s4Container.add("panel", undefined, "S4 Flowchart Steps");
             s4Panel.orientation   = "column";
@@ -402,6 +413,7 @@
             stepsContainer.alignChildren = ["fill", "top"];
             stepsContainer.spacing       = 0;
             stepsContainer.margins       = [0, 0, 0, 0];
+            stepsContainer.visible       = (detectedScale !== "S4");
 
             var stepsPanel = stepsContainer.add("panel", undefined, "Flowchart Steps");
             stepsPanel.orientation   = "column";
@@ -510,21 +522,7 @@
                 relayout();
             };
 
-            // ---- Radio button onClick: swap panels + track scale ----
-            var currentScale = "S1";
-            function onScaleChange(newScale) {
-                return function () {
-                    currentScale = newScale;
-                    var isS4 = (newScale === "S4");
-                    stepsContainer.visible = !isS4;
-                    s4Container.visible    =  isS4;
-                    relayout();
-                };
-            }
-            rbS1.onClick = onScaleChange("S1");
-            rbS2.onClick = onScaleChange("S2");
-            rbS3.onClick = onScaleChange("S3");
-            rbS4.onClick = onScaleChange("S4");
+            var currentScale = detectedScale;
 
             // ---- Bottom Buttons -----------------------------
             var bottomGroup = dlg.add("group");
@@ -582,9 +580,7 @@
             // ---- OK -----------------------------------------
             okBtn.onClick = function () {
                 var selectedScale = currentScale;
-
-                var workingPage = resolveWorkingPage(doc, selectedScale);
-                if (!workingPage) { return; }
+                var workingPage = activePage;
 
                 if (selectedScale === "S4") {
                     // ---- S4: collect dual-field steps ---------------
@@ -1366,9 +1362,45 @@
             docError = true;
         }
 
+        // --- Pre-flight: resolve active page and detect scale from its master ---
+        var activePage    = null;
+        var detectedScale = null;
+
         if (!docError) {
-            // --- Phase 1: Dialog + page resolution ---
-            var result = buildDialog(doc);
+            try {
+                activePage = app.activeWindow.activePage;
+            } catch (e) {
+                alert(
+                    "Could not determine the active page.\n\n" +
+                    "Please ensure a document page is active and run the script again."
+                );
+                docError = true;
+            }
+        }
+
+        if (!docError) {
+            detectedScale = detectScaleFromPage(activePage);
+            if (!detectedScale) {
+                var _masterInfo = "";
+                try {
+                    if (activePage.appliedMaster && activePage.appliedMaster.isValid) {
+                        _masterInfo = "\n\nApplied master: \"" + activePage.appliedMaster.name + "\"";
+                    } else {
+                        _masterInfo = "\n\nThe active page has no master applied.";
+                    }
+                } catch (e) {}
+                alert(
+                    "Could not detect a flowchart scale (S1/S2/S3/S4) from the active page’s master." +
+                    _masterInfo +
+                    "\n\nNavigate to a page with a flowchart master applied and run the script again."
+                );
+                docError = true;
+            }
+        }
+
+        if (!docError) {
+            // --- Phase 1: Dialog ---
+            var result = buildDialog(doc, activePage, detectedScale);
             if (!result) { docError = true; } // user cancelled
 
             // --- Override master items so locked items become editable ---
