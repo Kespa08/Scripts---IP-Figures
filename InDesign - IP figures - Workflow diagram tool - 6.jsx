@@ -247,7 +247,7 @@
             dlg.spacing       = 12;
             dlg.margins       = [18, 18, 18, 18];
 
-            var _screenH = $.screens[0].height;
+            var _screenH = $.screens[0].bottom - $.screens[0].top;
             var _dlgH    = Math.round(_screenH * 0.80);
             dlg.preferredSize = [-1, _dlgH];
 
