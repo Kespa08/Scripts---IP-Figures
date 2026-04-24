@@ -247,9 +247,8 @@
             dlg.spacing       = 12;
             dlg.margins       = [18, 18, 18, 18];
 
-            var _screenH = $.screens[0].bottom - $.screens[0].top;
-            var _dlgH    = Math.round(_screenH * 0.80);
-            dlg.preferredSize = [-1, _dlgH];
+            var DIALOG_HEIGHT = 520; // px in ScriptUI logical units — increase if dialog feels short, decrease if too tall
+            dlg.preferredSize = [-1, DIALOG_HEIGHT];
 
             // ---- Context info bar ---------------------------
             var infoGroup = dlg.add("group");
@@ -284,10 +283,10 @@
             function relayout() {
                 var loc = [dlg.location[0], dlg.location[1]];
                 dlg.layout.layout(true);
+                dlg.size = [dlg.size[0], DIALOG_HEIGHT];
                 dlg.location = loc;
                 dlg.update();
             }
-
             if (detectedScale === "S4") {
                 // ================================================================
                 // S4 PANEL — only built when detected scale is S4
