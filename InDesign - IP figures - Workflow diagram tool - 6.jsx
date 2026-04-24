@@ -288,10 +288,10 @@
             function relayout() {
                 var loc = [dlg.location[0], dlg.location[1]];
                 dlg.layout.layout(true);
+                dlg.size = [dlg.size[0], DIALOG_HEIGHT];
                 dlg.location = loc;
                 dlg.update();
             }
-
             if (detectedScale === "S4") {
                 // ================================================================
                 // S4 PANEL — only built when detected scale is S4
@@ -1404,9 +1404,9 @@
                     }
                 } catch (e) {}
                 alert(
-                    "Could not detect a flowchart scale (S1/S2/S3/S4) from the active page’s master." +
+                    "Could not detect a relevant master-page (S1/S2/S3/S4) applied to the active page." +
                     _masterInfo +
-                    "\n\nNavigate to a page with a flowchart master applied and run the script again."
+                    "\n\nEnsure relevant master-page is applied and run the script again."
                 );
                 docError = true;
             }
