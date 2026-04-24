@@ -247,9 +247,9 @@
             dlg.spacing       = 12;
             dlg.margins       = [18, 18, 18, 18];
 
-            var _screenH = $.screens[0].height;
-            var _dlgH    = Math.round(_screenH * 0.80);
-            dlg.preferredSize = [-1, _dlgH];
+            var DIALOG_HEIGHT = 520; // logical px — raise or lower to taste
+            var VISIBLE_STEPS = 5;  // step rows shown at once; scroll appears beyond this
+            dlg.preferredSize = [-1, DIALOG_HEIGHT];
 
             // ---- Context info bar ---------------------------
             var infoGroup = dlg.add("group");
@@ -274,12 +274,16 @@
             titleInput.helpTip     = "Replaces content of Title_Flowchart on the working page";
 
             // ---- Shared state — assigned in the conditional block below ----
-            var rows           = null; // S1/S2/S3 step row objects
+            var rows           = null; // visible step row UI objects (subset of stepData)
             var s4Rows         = null; // S4 step row objects
             var s4T1Input      = null; // S4 Title-1 header input
             var s4T2Input      = null; // S4 Title-2 header input
-            var populateRows   = null; // fills the steps panel from an array
             var populateRowsS4 = null; // fills the S4 panel from an array
+            // Virtual-list state (S1/S2/S3 only):
+            var stepData       = null; // all step text values (the real data store)
+            var scrollOffset   = 0;   // index of the first visible step
+            var syncToData     = null; // flush visible fields → stepData before any mutation
+            var renderRows     = null; // rebuild the VISIBLE_STEPS rows from stepData
 
             function relayout() {
                 var loc = [dlg.location[0], dlg.location[1]];
@@ -410,38 +414,57 @@
 
             } else {
                 // ================================================================
-                // STEPS PANEL (S1/S2/S3) — only built when detected scale is not S4
+                // STEPS PANEL (S1/S2/S3) — virtual list: only VISIBLE_STEPS rows
+                // are rendered at any time; stepData holds all content.
                 // ================================================================
+                stepData     = [""];
+                scrollOffset = 0;
+                rows         = [];
+
                 var stepsPanel = dlg.add("panel", undefined, "Flowchart Steps");
                 stepsPanel.orientation   = "column";
                 stepsPanel.alignChildren = ["fill", "top"];
                 stepsPanel.spacing       = 6;
                 stepsPanel.margins       = [10, 18, 10, 10];
 
-                var rowContainer = stepsPanel.add("group");
+                // Row area and scrollbar sit side-by-side
+                var scrollWrapper = stepsPanel.add("group");
+                scrollWrapper.orientation   = "row";
+                scrollWrapper.alignChildren = ["left", "top"];
+                scrollWrapper.spacing       = 4;
+
+                var rowContainer = scrollWrapper.add("group");
                 rowContainer.orientation   = "column";
                 rowContainer.alignChildren = ["fill", "top"];
                 rowContainer.spacing       = 5;
 
-                rows = [];
+                var scrollbar = scrollWrapper.add("scrollbar", undefined, 0, 0, 0);
+                scrollbar.minimumSize = [16, VISIBLE_STEPS * 51];
+                scrollbar.stepdelta   = 1;
+                scrollbar.jumpdelta   = VISIBLE_STEPS;
+                scrollbar.visible     = false;
 
-                var reindexRows = function () {
+                // syncToData — must be called before any mutation of stepData
+                syncToData = function () {
                     for (var i = 0; i < rows.length; i++) {
-                        rows[i].indexLabel.text = (i + 1) + ".";
+                        var di = scrollOffset + i;
+                        if (di < stepData.length) {
+                            stepData[di] = rows[i].inputField.text;
+                        }
                     }
                 };
 
-                var addRow = function (prefillText) {
+                // addRow — creates one UI row for data index dataIdx
+                var addRow = function (text, dataIdx) {
                     var row = rowContainer.add("group");
                     row.orientation   = "row";
                     row.alignChildren = ["left", "top"];
                     row.spacing       = 6;
 
-                    var lbl = row.add("statictext", undefined, (rows.length + 1) + ".");
+                    var lbl = row.add("statictext", undefined, (dataIdx + 1) + ".");
                     lbl.minimumSize = [22, 20];
 
-                    // Enter produces \r (hard paragraph break in InDesign).
-                    var input = row.add("edittext", undefined, prefillText || "", { multiline: true });
+                    var input = row.add("edittext", undefined, text || "", { multiline: true });
                     input.minimumSize = [290, 46];
                     input.maximumSize = [290, 46];
 
@@ -453,42 +476,61 @@
                     var rowObj = { group: row, inputField: input, indexLabel: lbl };
 
                     removeBtn.onClick = function () {
-                        if (rows.length === 1) {
-                            input.text = "";
+                        syncToData();
+                        if (stepData.length === 1) {
+                            stepData[0] = "";
+                            rows[0].inputField.text = "";
                             return;
                         }
-                        rowContainer.remove(row);
-                        var idx = -1;
-                        for (var k = 0; k < rows.length; k++) {
-                            if (rows[k] === rowObj) { idx = k; break; }
-                        }
-                        if (idx !== -1) { rows.splice(idx, 1); }
-                        reindexRows();
-                        relayout();
+                        stepData.splice(dataIdx, 1);
+                        scrollOffset = Math.min(
+                            scrollOffset,
+                            Math.max(0, stepData.length - VISIBLE_STEPS)
+                        );
+                        renderRows();
                     };
 
                     rows.push(rowObj);
                     return rowObj;
                 };
 
-                populateRows = function (values) {
+                // renderRows — tears down current UI rows and rebuilds the visible slice
+                renderRows = function () {
                     for (var i = rows.length - 1; i >= 0; i--) {
                         rowContainer.remove(rows[i].group);
                     }
                     rows.length = 0;
-                    for (var j = 0; j < values.length; j++) {
-                        addRow(values[j]);
+
+                    var end = Math.min(scrollOffset + VISIBLE_STEPS, stepData.length);
+                    for (var j = scrollOffset; j < end; j++) {
+                        addRow(stepData[j], j);
                     }
-                    if (rows.length === 0) { addRow(); }
+
+                    var maxScroll = Math.max(0, stepData.length - VISIBLE_STEPS);
+                    scrollbar.maxvalue = maxScroll;
+                    scrollbar.value    = Math.min(scrollOffset, maxScroll);
+                    scrollbar.visible  = stepData.length > VISIBLE_STEPS;
+
                     relayout();
                 };
 
-                addRow();
+                scrollbar.onChange = function () {
+                    syncToData();
+                    scrollOffset = Math.round(scrollbar.value);
+                    renderRows();
+                };
+
+                renderRows(); // seed: renders stepData[0] as first row
 
                 var addStepBtn = stepsPanel.add("button", undefined, "+ Add Step");
                 addStepBtn.alignment   = ["left", "center"];
                 addStepBtn.minimumSize = [100, 24];
-                addStepBtn.onClick = function () { addRow(); relayout(); };
+                addStepBtn.onClick = function () {
+                    syncToData();
+                    stepData.push("");
+                    scrollOffset = Math.max(0, stepData.length - VISIBLE_STEPS);
+                    renderRows();
+                };
             }
 
             var currentScale = detectedScale;
@@ -537,7 +579,9 @@
                         );
                         return;
                     }
-                    populateRows(steps);
+                    stepData = steps;
+                    scrollOffset = 0;
+                    renderRows();
                 }
             };
 
@@ -573,10 +617,11 @@
                         s4Header  : { t1: s4T1Input.text, t2: s4T2Input.text }
                     };
                 } else {
-                    // ---- S1/S2/S3: collect single-field steps -------
+                    // ---- S1/S2/S3: flush visible fields then collect from stepData ----
+                    syncToData();
                     var steps = [];
-                    for (var i = 0; i < rows.length; i++) {
-                        var val = rows[i].inputField.text;
+                    for (var i = 0; i < stepData.length; i++) {
+                        var val = stepData[i];
                         if (val.replace(/\s/g, "") !== "") { steps.push(val); }
                     }
                     if (steps.length === 0) {
