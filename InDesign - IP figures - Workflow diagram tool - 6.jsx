@@ -248,8 +248,10 @@
             dlg.margins       = [18, 18, 18, 18];
 
             var _screenH = $.screens[0].height;
-            var _dlgH    = Math.round(_screenH * 0.70);
+            var _screenW = $.screens[0].width;
+            var _dlgH    = Math.round(_screenH * 0.80);
             dlg.preferredSize = [-1, _dlgH];
+            dlg.maximumSize   = [_screenW, _dlgH];
 
             // ---- Context info bar ---------------------------
             var infoGroup = dlg.add("group");
@@ -273,173 +275,14 @@
             titleInput.maximumSize = [330, 22];
             titleInput.helpTip     = "Replaces content of Title_Flowchart on the working page";
 
-            // ================================================================
-            // S4 PANEL — visible when detected scale is S4
-            // Contains: T1/T2 header inputs + dual-field step rows
-            // ================================================================
-            // Group wrapper allows true collapse (panels retain chrome height even when invisible)
-            var s4Container = dlg.add("group");
-            s4Container.orientation   = "column";
-            s4Container.alignChildren = ["fill", "top"];
-            s4Container.spacing       = 0;
-            s4Container.margins       = [0, 0, 0, 0];
-            s4Container.visible       = (detectedScale === "S4");
+            // ---- Shared state — assigned in the conditional block below ----
+            var rows           = null; // S1/S2/S3 step row objects
+            var s4Rows         = null; // S4 step row objects
+            var s4T1Input      = null; // S4 Title-1 header input
+            var s4T2Input      = null; // S4 Title-2 header input
+            var populateRows   = null; // fills the steps panel from an array
+            var populateRowsS4 = null; // fills the S4 panel from an array
 
-            var s4Panel = s4Container.add("panel", undefined, "S4 Flowchart Steps");
-            s4Panel.orientation   = "column";
-            s4Panel.alignChildren = ["fill", "top"];
-            s4Panel.spacing       = 8;
-            s4Panel.margins       = [10, 18, 10, 10];
-
-            // ---- S4 header inputs (T1, T2) ------------------
-            var s4HeaderGroup = s4Panel.add("group");
-            s4HeaderGroup.orientation   = "column";
-            s4HeaderGroup.alignChildren = ["fill", "top"];
-            s4HeaderGroup.spacing       = 6;
-
-            var s4T1Group = s4HeaderGroup.add("group");
-            s4T1Group.orientation   = "row";
-            s4T1Group.alignChildren = ["left", "center"];
-            s4T1Group.spacing       = 8;
-            s4T1Group.add("statictext", undefined, "Title 1:");
-            var s4T1Input = s4T1Group.add("edittext", undefined, "");
-            s4T1Input.minimumSize = [290, 22];
-            s4T1Input.maximumSize = [290, 22];
-            s4T1Input.helpTip     = "Populates Text_T1 on the working page";
-
-            var s4T2Group = s4HeaderGroup.add("group");
-            s4T2Group.orientation   = "row";
-            s4T2Group.alignChildren = ["left", "center"];
-            s4T2Group.spacing       = 8;
-            s4T2Group.add("statictext", undefined, "Title 2:");
-            var s4T2Input = s4T2Group.add("edittext", undefined, "");
-            s4T2Input.minimumSize = [290, 22];
-            s4T2Input.maximumSize = [290, 22];
-            s4T2Input.helpTip     = "Populates Text_T2 on the working page";
-
-            // ---- S4 step rows (Title + Body per row) --------
-            var s4RowContainer = s4Panel.add("group");
-            s4RowContainer.orientation   = "column";
-            s4RowContainer.alignChildren = ["fill", "top"];
-            s4RowContainer.spacing       = 8;
-
-            var s4Rows = []; // { group, titleField, bodyField, indexLabel }
-
-            function reindexRowsS4() {
-                for (var i = 0; i < s4Rows.length; i++) {
-                    s4Rows[i].indexLabel.text = (i + 1) + ".";
-                }
-            }
-
-            function addRowS4(prefillTitle, prefillBody) {
-                var row = s4RowContainer.add("group");
-                row.orientation   = "row";
-                row.alignChildren = ["left", "top"];
-                row.spacing       = 6;
-
-                var lbl = row.add("statictext", undefined, (s4Rows.length + 1) + ".");
-                lbl.minimumSize = [22, 20];
-
-                // Title sub-group (label + field)
-                var titleGroup = row.add("group");
-                titleGroup.orientation   = "column";
-                titleGroup.alignChildren = ["left", "top"];
-                titleGroup.spacing       = 2;
-                titleGroup.add("statictext", undefined, "Title");
-                var titleField = titleGroup.add("edittext", undefined, prefillTitle || "", { multiline: true });
-                titleField.minimumSize = [135, 46];
-                titleField.maximumSize = [135, 46];
-
-                // Body sub-group (label + field)
-                var bodyGroup = row.add("group");
-                bodyGroup.orientation   = "column";
-                bodyGroup.alignChildren = ["left", "top"];
-                bodyGroup.spacing       = 2;
-                bodyGroup.add("statictext", undefined, "Body");
-                var bodyField = bodyGroup.add("edittext", undefined, prefillBody || "", { multiline: true });
-                bodyField.minimumSize = [135, 46];
-                bodyField.maximumSize = [135, 46];
-
-                var removeBtn = row.add("button", undefined, "x");
-                removeBtn.minimumSize = [26, 22];
-                removeBtn.maximumSize = [26, 22];
-
-                var rowObj = { group: row, titleField: titleField, bodyField: bodyField, indexLabel: lbl };
-
-                removeBtn.onClick = function () {
-                    if (s4Rows.length === 1) {
-                        titleField.text = "";
-                        bodyField.text  = "";
-                        return;
-                    }
-                    s4RowContainer.remove(row);
-                    var idx = -1;
-                    for (var k = 0; k < s4Rows.length; k++) {
-                        if (s4Rows[k] === rowObj) { idx = k; break; }
-                    }
-                    if (idx !== -1) { s4Rows.splice(idx, 1); }
-                    reindexRowsS4();
-                    relayout();
-                };
-
-                s4Rows.push(rowObj);
-                return rowObj;
-            }
-
-            function populateRowsS4(values) {
-                // values = [{title, body}, ...]
-                for (var i = s4Rows.length - 1; i >= 0; i--) {
-                    s4RowContainer.remove(s4Rows[i].group);
-                }
-                s4Rows.length = 0;
-                for (var j = 0; j < values.length; j++) {
-                    addRowS4(values[j].title || "", values[j].body || "");
-                }
-                if (s4Rows.length === 0) { addRowS4(); }
-                relayout();
-            }
-
-            // One blank S4 row to start
-            addRowS4();
-
-            var addS4StepBtn = s4Panel.add("button", undefined, "+ Add Step");
-            addS4StepBtn.alignment   = ["left", "center"];
-            addS4StepBtn.minimumSize = [100, 24];
-            addS4StepBtn.onClick = function () { addRowS4(); relayout(); };
-
-            // ---- Steps Panel (S1/S2/S3) ----------------------
-            var stepsContainer = dlg.add("group");
-            stepsContainer.orientation   = "column";
-            stepsContainer.alignChildren = ["fill", "top"];
-            stepsContainer.spacing       = 0;
-            stepsContainer.margins       = [0, 0, 0, 0];
-            stepsContainer.visible       = (detectedScale !== "S4");
-
-            var stepsPanel = stepsContainer.add("panel", undefined, "Flowchart Steps");
-            stepsPanel.orientation   = "column";
-            stepsPanel.alignChildren = ["fill", "top"];
-            stepsPanel.spacing       = 6;
-            stepsPanel.margins       = [10, 18, 10, 10];
-
-            var rowContainer = stepsPanel.add("group");
-            rowContainer.orientation   = "column";
-            rowContainer.alignChildren = ["fill", "top"];
-            rowContainer.spacing       = 5;
-
-            var rows = [];
-
-            // --------------------------------------------------
-            // BUG B + C FIX: relayout()
-            // Wraps every layout call to:
-            //   1. Save the window's screen position before layout
-            //      (layout(true) re-centers the window as a side
-            //      effect, causing the visible "jump").
-            //   2. Call layout(true) to reflow element positions.
-            //   3. Restore the saved screen position.
-            //   4. Call dlg.update() to force a paint pass
-            //      (layout pass alone does not repaint controls,
-            //      leaving dynamically added edittexts invisible).
-            // --------------------------------------------------
             function relayout() {
                 var loc = [dlg.location[0], dlg.location[1]];
                 dlg.layout.layout(true);
@@ -447,80 +290,208 @@
                 dlg.update();
             }
 
-            function reindexRows() {
-                for (var i = 0; i < rows.length; i++) {
-                    rows[i].indexLabel.text = (i + 1) + ".";
-                }
-            }
+            if (detectedScale === "S4") {
+                // ================================================================
+                // S4 PANEL — only built when detected scale is S4
+                // ================================================================
+                var s4Panel = dlg.add("panel", undefined, "S4 Flowchart Steps");
+                s4Panel.orientation   = "column";
+                s4Panel.alignChildren = ["fill", "top"];
+                s4Panel.spacing       = 8;
+                s4Panel.margins       = [10, 18, 10, 10];
 
-            function addRow(prefillText) {
-                var row = rowContainer.add("group");
-                row.orientation   = "row";
-                row.alignChildren = ["left", "top"]; // top-align number label with tall field
-                row.spacing       = 6;
+                var s4HeaderGroup = s4Panel.add("group");
+                s4HeaderGroup.orientation   = "column";
+                s4HeaderGroup.alignChildren = ["fill", "top"];
+                s4HeaderGroup.spacing       = 6;
 
-                var lbl = row.add("statictext", undefined, (rows.length + 1) + ".");
-                lbl.minimumSize = [22, 20];
+                var s4T1Group = s4HeaderGroup.add("group");
+                s4T1Group.orientation   = "row";
+                s4T1Group.alignChildren = ["left", "center"];
+                s4T1Group.spacing       = 8;
+                s4T1Group.add("statictext", undefined, "Title 1:");
+                s4T1Input = s4T1Group.add("edittext", undefined, "");
+                s4T1Input.minimumSize = [290, 22];
+                s4T1Input.maximumSize = [290, 22];
+                s4T1Input.helpTip     = "Populates Text_T1 on the working page";
 
-                // Multiline: Enter produces \r (hard paragraph break in InDesign).
-                // ScriptUI cannot distinguish Enter from Shift+Enter so all
-                // breaks become paragraph breaks -- correct for style detection.
-                var input = row.add("edittext", undefined, prefillText || "", { multiline: true });
-                input.minimumSize = [290, 46];
-                input.maximumSize = [290, 46];
+                var s4T2Group = s4HeaderGroup.add("group");
+                s4T2Group.orientation   = "row";
+                s4T2Group.alignChildren = ["left", "center"];
+                s4T2Group.spacing       = 8;
+                s4T2Group.add("statictext", undefined, "Title 2:");
+                s4T2Input = s4T2Group.add("edittext", undefined, "");
+                s4T2Input.minimumSize = [290, 22];
+                s4T2Input.maximumSize = [290, 22];
+                s4T2Input.helpTip     = "Populates Text_T2 on the working page";
 
-                var removeBtn = row.add("button", undefined, "x");
-                removeBtn.minimumSize = [26, 22];
-                removeBtn.maximumSize = [26, 22];
-                removeBtn.helpTip     = "Remove this step";
+                var s4RowContainer = s4Panel.add("group");
+                s4RowContainer.orientation   = "column";
+                s4RowContainer.alignChildren = ["fill", "top"];
+                s4RowContainer.spacing       = 8;
 
-                var rowObj = { group: row, inputField: input, indexLabel: lbl };
+                s4Rows = [];
 
-                removeBtn.onClick = function () {
-                    if (rows.length === 1) {
-                        input.text = "";
-                        return;
+                var reindexRowsS4 = function () {
+                    for (var i = 0; i < s4Rows.length; i++) {
+                        s4Rows[i].indexLabel.text = (i + 1) + ".";
                     }
-                    rowContainer.remove(row);
-                    var idx = -1;
-                    for (var k = 0; k < rows.length; k++) {
-                        if (rows[k] === rowObj) { idx = k; break; }
-                    }
-                    if (idx !== -1) { rows.splice(idx, 1); }
-                    reindexRows();
-                    relayout(); // BUG B+C FIX
                 };
 
-                rows.push(rowObj);
-                return rowObj;
-            }
+                var addRowS4 = function (prefillTitle, prefillBody) {
+                    var row = s4RowContainer.add("group");
+                    row.orientation   = "row";
+                    row.alignChildren = ["left", "top"];
+                    row.spacing       = 6;
 
-            function populateRows(values) {
-                for (var i = rows.length - 1; i >= 0; i--) {
-                    rowContainer.remove(rows[i].group);
-                }
-                rows.length = 0;
+                    var lbl = row.add("statictext", undefined, (s4Rows.length + 1) + ".");
+                    lbl.minimumSize = [22, 20];
 
-                for (var j = 0; j < values.length; j++) {
-                    addRow(values[j]);
-                }
-                if (rows.length === 0) { addRow(); }
+                    var titleGroup = row.add("group");
+                    titleGroup.orientation   = "column";
+                    titleGroup.alignChildren = ["left", "top"];
+                    titleGroup.spacing       = 2;
+                    titleGroup.add("statictext", undefined, "Title");
+                    var titleField = titleGroup.add("edittext", undefined, prefillTitle || "", { multiline: true });
+                    titleField.minimumSize = [135, 46];
+                    titleField.maximumSize = [135, 46];
 
-                relayout(); // BUG B+C FIX: replaces bare layout(true) call
-            }
+                    var bodyGroup = row.add("group");
+                    bodyGroup.orientation   = "column";
+                    bodyGroup.alignChildren = ["left", "top"];
+                    bodyGroup.spacing       = 2;
+                    bodyGroup.add("statictext", undefined, "Body");
+                    var bodyField = bodyGroup.add("edittext", undefined, prefillBody || "", { multiline: true });
+                    bodyField.minimumSize = [135, 46];
+                    bodyField.maximumSize = [135, 46];
 
-            // One blank row to start
-            addRow();
+                    var removeBtn = row.add("button", undefined, "x");
+                    removeBtn.minimumSize = [26, 22];
+                    removeBtn.maximumSize = [26, 22];
 
-            // ---- Add Step Button ----------------------------
-            var addStepBtn = stepsPanel.add("button", undefined, "+ Add Step");
-            addStepBtn.alignment   = ["left", "center"];
-            addStepBtn.minimumSize = [100, 24];
+                    var rowObj = { group: row, titleField: titleField, bodyField: bodyField, indexLabel: lbl };
 
-            addStepBtn.onClick = function () {
+                    removeBtn.onClick = function () {
+                        if (s4Rows.length === 1) {
+                            titleField.text = "";
+                            bodyField.text  = "";
+                            return;
+                        }
+                        s4RowContainer.remove(row);
+                        var idx = -1;
+                        for (var k = 0; k < s4Rows.length; k++) {
+                            if (s4Rows[k] === rowObj) { idx = k; break; }
+                        }
+                        if (idx !== -1) { s4Rows.splice(idx, 1); }
+                        reindexRowsS4();
+                        relayout();
+                    };
+
+                    s4Rows.push(rowObj);
+                    return rowObj;
+                };
+
+                populateRowsS4 = function (values) {
+                    for (var i = s4Rows.length - 1; i >= 0; i--) {
+                        s4RowContainer.remove(s4Rows[i].group);
+                    }
+                    s4Rows.length = 0;
+                    for (var j = 0; j < values.length; j++) {
+                        addRowS4(values[j].title || "", values[j].body || "");
+                    }
+                    if (s4Rows.length === 0) { addRowS4(); }
+                    relayout();
+                };
+
+                addRowS4();
+
+                var addS4StepBtn = s4Panel.add("button", undefined, "+ Add Step");
+                addS4StepBtn.alignment   = ["left", "center"];
+                addS4StepBtn.minimumSize = [100, 24];
+                addS4StepBtn.onClick = function () { addRowS4(); relayout(); };
+
+            } else {
+                // ================================================================
+                // STEPS PANEL (S1/S2/S3) — only built when detected scale is not S4
+                // ================================================================
+                var stepsPanel = dlg.add("panel", undefined, "Flowchart Steps");
+                stepsPanel.orientation   = "column";
+                stepsPanel.alignChildren = ["fill", "top"];
+                stepsPanel.spacing       = 6;
+                stepsPanel.margins       = [10, 18, 10, 10];
+
+                var rowContainer = stepsPanel.add("group");
+                rowContainer.orientation   = "column";
+                rowContainer.alignChildren = ["fill", "top"];
+                rowContainer.spacing       = 5;
+
+                rows = [];
+
+                var reindexRows = function () {
+                    for (var i = 0; i < rows.length; i++) {
+                        rows[i].indexLabel.text = (i + 1) + ".";
+                    }
+                };
+
+                var addRow = function (prefillText) {
+                    var row = rowContainer.add("group");
+                    row.orientation   = "row";
+                    row.alignChildren = ["left", "top"];
+                    row.spacing       = 6;
+
+                    var lbl = row.add("statictext", undefined, (rows.length + 1) + ".");
+                    lbl.minimumSize = [22, 20];
+
+                    // Enter produces \r (hard paragraph break in InDesign).
+                    var input = row.add("edittext", undefined, prefillText || "", { multiline: true });
+                    input.minimumSize = [290, 46];
+                    input.maximumSize = [290, 46];
+
+                    var removeBtn = row.add("button", undefined, "x");
+                    removeBtn.minimumSize = [26, 22];
+                    removeBtn.maximumSize = [26, 22];
+                    removeBtn.helpTip     = "Remove this step";
+
+                    var rowObj = { group: row, inputField: input, indexLabel: lbl };
+
+                    removeBtn.onClick = function () {
+                        if (rows.length === 1) {
+                            input.text = "";
+                            return;
+                        }
+                        rowContainer.remove(row);
+                        var idx = -1;
+                        for (var k = 0; k < rows.length; k++) {
+                            if (rows[k] === rowObj) { idx = k; break; }
+                        }
+                        if (idx !== -1) { rows.splice(idx, 1); }
+                        reindexRows();
+                        relayout();
+                    };
+
+                    rows.push(rowObj);
+                    return rowObj;
+                };
+
+                populateRows = function (values) {
+                    for (var i = rows.length - 1; i >= 0; i--) {
+                        rowContainer.remove(rows[i].group);
+                    }
+                    rows.length = 0;
+                    for (var j = 0; j < values.length; j++) {
+                        addRow(values[j]);
+                    }
+                    if (rows.length === 0) { addRow(); }
+                    relayout();
+                };
+
                 addRow();
-                relayout();
-            };
+
+                var addStepBtn = stepsPanel.add("button", undefined, "+ Add Step");
+                addStepBtn.alignment   = ["left", "center"];
+                addStepBtn.minimumSize = [100, 24];
+                addStepBtn.onClick = function () { addRow(); relayout(); };
+            }
 
             var currentScale = detectedScale;
 
