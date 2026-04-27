@@ -286,12 +286,13 @@
             var renderRows     = null; // rebuild the VISIBLE_STEPS rows from stepData
 
             function relayout() {
-                var loc = [dlg.location[0], dlg.location[1]];
+                var loc = dlg.location ? [dlg.location[0], dlg.location[1]] : null;
                 dlg.layout.layout(true);
                 dlg.size = [dlg.size[0], DIALOG_HEIGHT];
-                dlg.location = loc;
+                if (loc) { dlg.location = loc; }
                 dlg.update();
             }
+
             if (detectedScale === "S4") {
                 // ================================================================
                 // S4 PANEL — only built when detected scale is S4
@@ -414,8 +415,9 @@
 
             } else {
                 // ================================================================
-                // STEPS PANEL (S1/S2/S3) — virtual list: only VISIBLE_STEPS rows
-                // are rendered at any time; stepData holds all content.
+                // STEPS PANEL (S1/S2/S3) — fixed-pool: all VISIBLE_STEPS rows are
+                // built once at construction. renderRows() updates content in-place
+                // (no DOM mutations, no layout(true)) → no flicker, no size changes.
                 // ================================================================
                 stepData     = [""];
                 scrollOffset = 0;
@@ -427,7 +429,6 @@
                 stepsPanel.spacing       = 6;
                 stepsPanel.margins       = [10, 18, 10, 10];
 
-                // Row area and scrollbar sit side-by-side
                 var scrollWrapper = stepsPanel.add("group");
                 scrollWrapper.orientation   = "row";
                 scrollWrapper.alignChildren = ["left", "top"];
@@ -440,78 +441,101 @@
 
                 var scrollbar = scrollWrapper.add("scrollbar", undefined, 0, 0, 0);
                 scrollbar.minimumSize = [16, VISIBLE_STEPS * 51];
+                scrollbar.maximumSize = [16, VISIBLE_STEPS * 51];
                 scrollbar.stepdelta   = 1;
                 scrollbar.jumpdelta   = VISIBLE_STEPS;
                 scrollbar.visible     = false;
 
-                // syncToData — must be called before any mutation of stepData
+                // Build the fixed pool — these DOM rows are created once and never removed.
+                // Each rowObj.dataIndex tracks which stepData entry this row currently shows;
+                // renderRows() updates dataIndex and content in-place without touching the DOM.
+                var pi;
+                for (pi = 0; pi < VISIBLE_STEPS; pi++) {
+                    (function () {
+                        var row = rowContainer.add("group");
+                        row.orientation   = "row";
+                        row.alignChildren = ["left", "top"];
+                        row.spacing       = 6;
+
+                        var lbl = row.add("statictext", undefined, "1.");
+                        lbl.minimumSize = [22, 20];
+
+                        var input = row.add("edittext", undefined, "", { multiline: true });
+                        input.minimumSize = [290, 46];
+                        input.maximumSize = [290, 46];
+
+                        var removeBtn = row.add("button", undefined, "x");
+                        removeBtn.minimumSize = [26, 22];
+                        removeBtn.maximumSize = [26, 22];
+                        removeBtn.helpTip     = "Remove this step";
+
+                        var rowObj = {
+                            group      : row,
+                            inputField : input,
+                            indexLabel : lbl,
+                            removeBtn  : removeBtn,
+                            dataIndex  : -1   // -1 = no backing data (blank/disabled row)
+                        };
+
+                        // Read dataIndex at click time — never stale because renderRows updates it
+                        removeBtn.onClick = function () {
+                            var di = rowObj.dataIndex;
+                            if (di < 0 || di >= stepData.length) { return; }
+                            syncToData();
+                            if (stepData.length === 1) {
+                                stepData[0] = "";
+                                rows[0].inputField.text = "";
+                                dlg.update();
+                                return;
+                            }
+                            stepData.splice(di, 1);
+                            scrollOffset = Math.min(
+                                scrollOffset,
+                                Math.max(0, stepData.length - VISIBLE_STEPS)
+                            );
+                            renderRows();
+                        };
+
+                        rows.push(rowObj);
+                    })();
+                }
+
+                // Flush visible input content → stepData (only for rows that have backing data)
                 syncToData = function () {
-                    for (var i = 0; i < rows.length; i++) {
-                        var di = scrollOffset + i;
-                        if (di < stepData.length) {
-                            stepData[di] = rows[i].inputField.text;
+                    for (var k = 0; k < rows.length; k++) {
+                        var di = rows[k].dataIndex;
+                        if (di >= 0 && di < stepData.length) {
+                            stepData[di] = rows[k].inputField.text;
                         }
                     }
                 };
 
-                // addRow — creates one UI row for data index dataIdx
-                var addRow = function (text, dataIdx) {
-                    var row = rowContainer.add("group");
-                    row.orientation   = "row";
-                    row.alignChildren = ["left", "top"];
-                    row.spacing       = 6;
-
-                    var lbl = row.add("statictext", undefined, (dataIdx + 1) + ".");
-                    lbl.minimumSize = [22, 20];
-
-                    var input = row.add("edittext", undefined, text || "", { multiline: true });
-                    input.minimumSize = [290, 46];
-                    input.maximumSize = [290, 46];
-
-                    var removeBtn = row.add("button", undefined, "x");
-                    removeBtn.minimumSize = [26, 22];
-                    removeBtn.maximumSize = [26, 22];
-                    removeBtn.helpTip     = "Remove this step";
-
-                    var rowObj = { group: row, inputField: input, indexLabel: lbl };
-
-                    removeBtn.onClick = function () {
-                        syncToData();
-                        if (stepData.length === 1) {
-                            stepData[0] = "";
-                            rows[0].inputField.text = "";
-                            return;
-                        }
-                        stepData.splice(dataIdx, 1);
-                        scrollOffset = Math.min(
-                            scrollOffset,
-                            Math.max(0, stepData.length - VISIBLE_STEPS)
-                        );
-                        renderRows();
-                    };
-
-                    rows.push(rowObj);
-                    return rowObj;
-                };
-
-                // renderRows — tears down current UI rows and rebuilds the visible slice
+                // Update pool row content in-place — no DOM mutations, no layout(true).
+                // Rows with no backing data are blanked and disabled.
                 renderRows = function () {
-                    for (var i = rows.length - 1; i >= 0; i--) {
-                        rowContainer.remove(rows[i].group);
+                    var k;
+                    for (k = 0; k < VISIBLE_STEPS; k++) {
+                        var rowObj  = rows[k];
+                        var dataIdx = scrollOffset + k;
+                        if (dataIdx < stepData.length) {
+                            rowObj.dataIndex           = dataIdx;
+                            rowObj.indexLabel.text     = (dataIdx + 1) + ".";
+                            rowObj.inputField.text     = stepData[dataIdx];
+                            rowObj.inputField.enabled  = true;
+                            rowObj.removeBtn.enabled   = true;
+                        } else {
+                            rowObj.dataIndex           = -1;
+                            rowObj.indexLabel.text     = "";
+                            rowObj.inputField.text     = "";
+                            rowObj.inputField.enabled  = false;
+                            rowObj.removeBtn.enabled   = false;
+                        }
                     }
-                    rows.length = 0;
-
-                    var end = Math.min(scrollOffset + VISIBLE_STEPS, stepData.length);
-                    for (var j = scrollOffset; j < end; j++) {
-                        addRow(stepData[j], j);
-                    }
-
                     var maxScroll = Math.max(0, stepData.length - VISIBLE_STEPS);
                     scrollbar.maxvalue = maxScroll;
                     scrollbar.value    = Math.min(scrollOffset, maxScroll);
                     scrollbar.visible  = stepData.length > VISIBLE_STEPS;
-
-                    relayout();
+                    dlg.update();
                 };
 
                 scrollbar.onChange = function () {
@@ -520,7 +544,7 @@
                     renderRows();
                 };
 
-                renderRows(); // seed: renders stepData[0] as first row
+                renderRows(); // seed: populate first row from stepData[0]
 
                 var addStepBtn = stepsPanel.add("button", undefined, "+ Add Step");
                 addStepBtn.alignment   = ["left", "center"];
