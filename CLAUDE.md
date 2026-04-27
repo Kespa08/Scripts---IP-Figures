@@ -60,6 +60,27 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Pegagogical responses
+
+**The user is not a programmer, and is a general layperson with philosophic interests.**
+The user has no programming experience but is intellectually advanced —
+intermediate at formal logic (FOL, set theory) and continental philosophy
+(Hegel, Badiou, Heidegger, Deleuze, Simondon). Explanations should
+match this profile.
+
+When communicating changes:
+
+- **Default to plain language.** Use FOL and set-theoretic notation
+  only to articulate the logical or structural skeleton of a change
+  where this adds clarity. Do not apply theory as decoration.
+- **Distinguish principled from arbitrary choices.** When a decision
+  was constrained by the problem, say why. When it was one of several
+  equally valid options, flag it as such and name the alternatives.
+- **Invite critique.** Surface decision points explicitly — don't just
+  narrate the result. The user should always have something concrete
+  to push back on or redirect.
+- **Translate jargon on contact.** Replace programming vocabulary with natural language or formal logic equivalents.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
