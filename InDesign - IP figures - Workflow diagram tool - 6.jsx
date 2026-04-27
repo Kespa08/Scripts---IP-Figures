@@ -518,17 +518,19 @@
                         var rowObj  = rows[k];
                         var dataIdx = scrollOffset + k;
                         if (dataIdx < stepData.length) {
-                            rowObj.dataIndex           = dataIdx;
-                            rowObj.indexLabel.text     = (dataIdx + 1) + ".";
-                            rowObj.inputField.text     = stepData[dataIdx];
-                            rowObj.inputField.enabled  = true;
-                            rowObj.removeBtn.enabled   = true;
+                            rowObj.dataIndex            = dataIdx;
+                            rowObj.indexLabel.text      = (dataIdx + 1) + ".";
+                            rowObj.inputField.text      = stepData[dataIdx];
+                            rowObj.inputField.enabled   = true;
+                            rowObj.inputField.readonly  = false;
+                            rowObj.removeBtn.enabled    = true;
                         } else {
-                            rowObj.dataIndex           = -1;
-                            rowObj.indexLabel.text     = "";
-                            rowObj.inputField.text     = "";
-                            rowObj.inputField.enabled  = false;
-                            rowObj.removeBtn.enabled   = false;
+                            rowObj.dataIndex            = -1;
+                            rowObj.indexLabel.text      = "";
+                            rowObj.inputField.text      = "";
+                            rowObj.inputField.enabled   = false;
+                            rowObj.inputField.readonly  = true;
+                            rowObj.removeBtn.enabled    = false;
                         }
                     }
                     var maxScroll = Math.max(0, stepData.length - VISIBLE_STEPS);
@@ -817,6 +819,16 @@
                 var s = doc.paragraphStyles.item(styleName);
                 if (s && s.isValid) { return s; }
             } catch (e) {}
+            // Fallback: linear scan across doc.allParagraphStyles.
+            // doc.paragraphStyles.item() can fail to resolve styles that sit
+            // inside a paragraph style GROUP — doc.allParagraphStyles is a flat
+            // JS array that always includes grouped styles regardless of nesting.
+            try {
+                var all = doc.allParagraphStyles;
+                for (var fi = 0; fi < all.length; fi++) {
+                    if (all[fi].name === styleName) { return all[fi]; }
+                }
+            } catch (e2) {}
             return null;
         }
 
@@ -950,15 +962,17 @@
 
             // Pass C: apply paragraph styles to the now-stable paragraph collection.
             // No contents are modified here so the collection cannot shift.
+            $.writeln("[FlowchartBuilder] placeTextBox scaleNum=" + scaleNum);
             for (var q = 0; q < styleNames.length; q++) {
                 if (styleNames[q]) {
                     try {
                         var style = getParaStyle(doc, styleNames[q]);
+                        $.writeln("  para[" + q + "] styleName=\"" + styleNames[q] + "\" found=" + (style ? "YES" : "NO"));
                         if (style) {
                             newTB.paragraphs[q].appliedParagraphStyle = style;
                         }
                     } catch (e) {
-                        $.writeln("Style error para " + q + " (" + styleNames[q] + "): " + e.message);
+                        $.writeln("  para[" + q + "] ERROR: " + e.message);
                     }
                 }
             }
@@ -1483,11 +1497,15 @@
                 );
 
                 // QA Stage 3 — verify positions before removing this alert
+                var _qaScaleNum = (result.scale === "S1") ? "1"
+                                : (result.scale === "S2") ? "2"
+                                : (result.scale === "S3") ? "3" : "4";
                 alert(
                     "=== Phase 3 QA -- Layout Log ===\n\n" +
                     "Scale     : " + result.scale + "\n" +
+                    "scaleNum  : " + _qaScaleNum + "  (styles: NumberedList_S" + _qaScaleNum + " / Bullets_S" + _qaScaleNum + ")\n" +
                     "Boxes     : " + result.steps.length + "\n" +
-                    "scaleOffset: " + (result.scale === "S1" ? "6.5" : "13") + " pt (S3 defaults to 13)\n\n" +
+                    "scaleOffset: " + (result.scale === "S1" ? "6.5" : "13") + " pt\n\n" +
                     "Stacking (all values in doc units):\n" +
                     log.join("\n") + "\n\n" +
                     "Check in InDesign:\n" +
