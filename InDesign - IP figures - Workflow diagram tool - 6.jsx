@@ -1122,9 +1122,15 @@
         function executePhase3(doc, workingPage, result, templateData) {
             var steps       = result.steps;
             var scale       = result.scale;
-            // S3 offset: defaulting to 13pt (same as S2) -- update if spec differs
-            var scaleOffset = (scale === "S1") ? 6.5 : 13;
-            var scaleNum   = (scale === "S1") ? "1" : (scale === "S2") ? "2" : (scale === "S3") ? "3" : "4";
+            var scaleOffset;
+            if (scale === "S1") { scaleOffset = 6.5; }
+            else                { scaleOffset = 13;  }
+
+            var scaleNum;
+            if      (scale === "S1") { scaleNum = "1"; }
+            else if (scale === "S2") { scaleNum = "2"; }
+            else if (scale === "S3") { scaleNum = "3"; }
+            else                     { scaleNum = "4"; }
 
             var tbTemplate  = templateData.textBox.item;
             var arTemplate  = templateData.arrow.item;
@@ -1134,7 +1140,7 @@
             var boxX        = tbGeo.x;
             var boxWidth    = tbGeo.w;
             var prevBottom  = null;
-            var log         = [];
+            var log         = ["scaleNum=" + scaleNum + "  styles: NumberedList_S" + scaleNum + " / Bullets_S" + scaleNum];
 
             // BUG 1 FIX: derive arrow vertical offset from the template
             // rather than using the raw 13pt spec value.
@@ -1497,15 +1503,10 @@
                 );
 
                 // QA Stage 3 — verify positions before removing this alert
-                var _qaScaleNum = (result.scale === "S1") ? "1"
-                                : (result.scale === "S2") ? "2"
-                                : (result.scale === "S3") ? "3" : "4";
                 alert(
                     "=== Phase 3 QA -- Layout Log ===\n\n" +
                     "Scale     : " + result.scale + "\n" +
-                    "scaleNum  : " + _qaScaleNum + "  (styles: NumberedList_S" + _qaScaleNum + " / Bullets_S" + _qaScaleNum + ")\n" +
-                    "Boxes     : " + result.steps.length + "\n" +
-                    "scaleOffset: " + (result.scale === "S1" ? "6.5" : "13") + " pt\n\n" +
+                    "Boxes     : " + result.steps.length + "\n\n" +
                     "Stacking (all values in doc units):\n" +
                     log.join("\n") + "\n\n" +
                     "Check in InDesign:\n" +
