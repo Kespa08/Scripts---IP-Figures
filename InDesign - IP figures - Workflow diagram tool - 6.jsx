@@ -274,16 +274,21 @@
             titleInput.helpTip     = "Replaces content of Title_Flowchart on the working page";
 
             // ---- Shared state — assigned in the conditional block below ----
-            var rows           = null; // visible step row UI objects (subset of stepData)
-            var s4Rows         = null; // S4 step row objects
+            var rows           = null; // S1/S2/S3 pool row objects
+            var s4Rows         = null; // S4 pool row objects
             var s4T1Input      = null; // S4 Title-1 header input
             var s4T2Input      = null; // S4 Title-2 header input
-            var populateRowsS4 = null; // fills the S4 panel from an array
-            // Virtual-list state (S1/S2/S3 only):
-            var stepData       = null; // all step text values (the real data store)
-            var scrollOffset   = 0;   // index of the first visible step
-            var syncToData     = null; // flush visible fields → stepData before any mutation
-            var renderRows     = null; // rebuild the VISIBLE_STEPS rows from stepData
+            var populateRowsS4 = null; // replace S4 step data from an array and re-render
+            // S1/S2/S3 virtual-list state:
+            var stepData       = null; // all step text values
+            var scrollOffset   = 0;
+            var syncToData     = null;
+            var renderRows     = null;
+            // S4 virtual-list state (mirrors S1/S2/S3 pattern):
+            var s4StepData     = null; // all S4 step objects [{title, body}]
+            var s4ScrollOffset = 0;
+            var syncToDataS4   = null;
+            var renderRowsS4   = null;
 
             function relayout() {
                 var loc = dlg.location ? [dlg.location[0], dlg.location[1]] : null;
@@ -295,14 +300,21 @@
 
             if (detectedScale === "S4") {
                 // ================================================================
-                // S4 PANEL — only built when detected scale is S4
+                // S4 PANEL — fixed-pool, same architecture as S1/S2/S3 panel.
+                // s4StepData[] is the data store; VISIBLE_STEPS DOM rows are built
+                // once and never removed. renderRowsS4() updates content in-place.
                 // ================================================================
+                s4StepData     = [{ title: "", body: "" }];
+                s4ScrollOffset = 0;
+                s4Rows         = [];
+
                 var s4Panel = dlg.add("panel", undefined, "S4 Flowchart Steps");
                 s4Panel.orientation   = "column";
                 s4Panel.alignChildren = ["fill", "top"];
                 s4Panel.spacing       = 8;
                 s4Panel.margins       = [10, 18, 10, 10];
 
+                // Title 1 / Title 2 header inputs — not scrolled, always visible
                 var s4HeaderGroup = s4Panel.add("group");
                 s4HeaderGroup.orientation   = "column";
                 s4HeaderGroup.alignChildren = ["fill", "top"];
@@ -328,90 +340,159 @@
                 s4T2Input.maximumSize = [290, 22];
                 s4T2Input.helpTip     = "Populates Text_T2 on the working page";
 
-                var s4RowContainer = s4Panel.add("group");
+                // Step rows + scrollbar sit side-by-side
+                var s4ScrollWrapper = s4Panel.add("group");
+                s4ScrollWrapper.orientation   = "row";
+                s4ScrollWrapper.alignChildren = ["left", "top"];
+                s4ScrollWrapper.spacing       = 4;
+
+                var s4RowContainer = s4ScrollWrapper.add("group");
                 s4RowContainer.orientation   = "column";
                 s4RowContainer.alignChildren = ["fill", "top"];
                 s4RowContainer.spacing       = 8;
 
-                s4Rows = [];
+                var s4Scrollbar = s4ScrollWrapper.add("scrollbar", undefined, 0, 0, 0);
+                s4Scrollbar.minimumSize = [16, VISIBLE_STEPS * 78];
+                s4Scrollbar.maximumSize = [16, VISIBLE_STEPS * 78];
+                s4Scrollbar.stepdelta   = 1;
+                s4Scrollbar.jumpdelta   = VISIBLE_STEPS;
+                s4Scrollbar.visible     = false;
 
-                var reindexRowsS4 = function () {
-                    for (var i = 0; i < s4Rows.length; i++) {
-                        s4Rows[i].indexLabel.text = (i + 1) + ".";
+                // Build the fixed pool of VISIBLE_STEPS S4 rows
+                var s4pi;
+                for (s4pi = 0; s4pi < VISIBLE_STEPS; s4pi++) {
+                    (function () {
+                        var row = s4RowContainer.add("group");
+                        row.orientation   = "row";
+                        row.alignChildren = ["left", "top"];
+                        row.spacing       = 6;
+
+                        var lbl = row.add("statictext", undefined, "1.");
+                        lbl.minimumSize = [22, 20];
+
+                        var titleGroup = row.add("group");
+                        titleGroup.orientation   = "column";
+                        titleGroup.alignChildren = ["left", "top"];
+                        titleGroup.spacing       = 2;
+                        titleGroup.add("statictext", undefined, "Title");
+                        var titleField = titleGroup.add("edittext", undefined, "", { multiline: true });
+                        titleField.minimumSize = [135, 46];
+                        titleField.maximumSize = [135, 46];
+
+                        var bodyGroup = row.add("group");
+                        bodyGroup.orientation   = "column";
+                        bodyGroup.alignChildren = ["left", "top"];
+                        bodyGroup.spacing       = 2;
+                        bodyGroup.add("statictext", undefined, "Body");
+                        var bodyField = bodyGroup.add("edittext", undefined, "", { multiline: true });
+                        bodyField.minimumSize = [135, 46];
+                        bodyField.maximumSize = [135, 46];
+
+                        var removeBtn = row.add("button", undefined, "x");
+                        removeBtn.minimumSize = [26, 22];
+                        removeBtn.maximumSize = [26, 22];
+
+                        var rowObj = {
+                            group      : row,
+                            titleField : titleField,
+                            bodyField  : bodyField,
+                            indexLabel : lbl,
+                            removeBtn  : removeBtn,
+                            dataIndex  : -1
+                        };
+
+                        removeBtn.onClick = function () {
+                            var di = rowObj.dataIndex;
+                            if (di < 0 || di >= s4StepData.length) { return; }
+                            syncToDataS4();
+                            if (s4StepData.length === 1) {
+                                s4StepData[0] = { title: "", body: "" };
+                                s4Rows[0].titleField.text = "";
+                                s4Rows[0].bodyField.text  = "";
+                                dlg.update();
+                                return;
+                            }
+                            s4StepData.splice(di, 1);
+                            s4ScrollOffset = Math.min(
+                                s4ScrollOffset,
+                                Math.max(0, s4StepData.length - VISIBLE_STEPS)
+                            );
+                            renderRowsS4();
+                        };
+
+                        s4Rows.push(rowObj);
+                    })();
+                }
+
+                syncToDataS4 = function () {
+                    for (var k = 0; k < s4Rows.length; k++) {
+                        var di = s4Rows[k].dataIndex;
+                        if (di >= 0 && di < s4StepData.length) {
+                            s4StepData[di] = {
+                                title: s4Rows[k].titleField.text,
+                                body:  s4Rows[k].bodyField.text
+                            };
+                        }
                     }
                 };
 
-                var addRowS4 = function (prefillTitle, prefillBody) {
-                    var row = s4RowContainer.add("group");
-                    row.orientation   = "row";
-                    row.alignChildren = ["left", "top"];
-                    row.spacing       = 6;
-
-                    var lbl = row.add("statictext", undefined, (s4Rows.length + 1) + ".");
-                    lbl.minimumSize = [22, 20];
-
-                    var titleGroup = row.add("group");
-                    titleGroup.orientation   = "column";
-                    titleGroup.alignChildren = ["left", "top"];
-                    titleGroup.spacing       = 2;
-                    titleGroup.add("statictext", undefined, "Title");
-                    var titleField = titleGroup.add("edittext", undefined, prefillTitle || "", { multiline: true });
-                    titleField.minimumSize = [135, 46];
-                    titleField.maximumSize = [135, 46];
-
-                    var bodyGroup = row.add("group");
-                    bodyGroup.orientation   = "column";
-                    bodyGroup.alignChildren = ["left", "top"];
-                    bodyGroup.spacing       = 2;
-                    bodyGroup.add("statictext", undefined, "Body");
-                    var bodyField = bodyGroup.add("edittext", undefined, prefillBody || "", { multiline: true });
-                    bodyField.minimumSize = [135, 46];
-                    bodyField.maximumSize = [135, 46];
-
-                    var removeBtn = row.add("button", undefined, "x");
-                    removeBtn.minimumSize = [26, 22];
-                    removeBtn.maximumSize = [26, 22];
-
-                    var rowObj = { group: row, titleField: titleField, bodyField: bodyField, indexLabel: lbl };
-
-                    removeBtn.onClick = function () {
-                        if (s4Rows.length === 1) {
-                            titleField.text = "";
-                            bodyField.text  = "";
-                            return;
+                renderRowsS4 = function () {
+                    var k;
+                    for (k = 0; k < VISIBLE_STEPS; k++) {
+                        var rowObj  = s4Rows[k];
+                        var dataIdx = s4ScrollOffset + k;
+                        if (dataIdx < s4StepData.length) {
+                            rowObj.dataIndex           = dataIdx;
+                            rowObj.indexLabel.text     = (dataIdx + 1) + ".";
+                            rowObj.titleField.text     = s4StepData[dataIdx].title;
+                            rowObj.bodyField.text      = s4StepData[dataIdx].body;
+                            rowObj.titleField.enabled  = true;
+                            rowObj.titleField.readonly = false;
+                            rowObj.bodyField.enabled   = true;
+                            rowObj.bodyField.readonly  = false;
+                            rowObj.removeBtn.enabled   = true;
+                        } else {
+                            rowObj.dataIndex           = -1;
+                            rowObj.indexLabel.text     = "";
+                            rowObj.titleField.text     = "";
+                            rowObj.bodyField.text      = "";
+                            rowObj.titleField.enabled  = false;
+                            rowObj.titleField.readonly = true;
+                            rowObj.bodyField.enabled   = false;
+                            rowObj.bodyField.readonly  = true;
+                            rowObj.removeBtn.enabled   = false;
                         }
-                        s4RowContainer.remove(row);
-                        var idx = -1;
-                        for (var k = 0; k < s4Rows.length; k++) {
-                            if (s4Rows[k] === rowObj) { idx = k; break; }
-                        }
-                        if (idx !== -1) { s4Rows.splice(idx, 1); }
-                        reindexRowsS4();
-                        relayout();
-                    };
-
-                    s4Rows.push(rowObj);
-                    return rowObj;
+                    }
+                    var maxScroll = Math.max(0, s4StepData.length - VISIBLE_STEPS);
+                    s4Scrollbar.maxvalue = maxScroll;
+                    s4Scrollbar.value    = Math.min(s4ScrollOffset, maxScroll);
+                    s4Scrollbar.visible  = s4StepData.length > VISIBLE_STEPS;
+                    dlg.update();
                 };
+
+                s4Scrollbar.onChange = function () {
+                    syncToDataS4();
+                    s4ScrollOffset = Math.round(s4Scrollbar.value);
+                    renderRowsS4();
+                };
+
+                renderRowsS4(); // seed
 
                 populateRowsS4 = function (values) {
-                    for (var i = s4Rows.length - 1; i >= 0; i--) {
-                        s4RowContainer.remove(s4Rows[i].group);
-                    }
-                    s4Rows.length = 0;
-                    for (var j = 0; j < values.length; j++) {
-                        addRowS4(values[j].title || "", values[j].body || "");
-                    }
-                    if (s4Rows.length === 0) { addRowS4(); }
-                    relayout();
+                    s4StepData    = values;
+                    s4ScrollOffset = 0;
+                    renderRowsS4();
                 };
-
-                addRowS4();
 
                 var addS4StepBtn = s4Panel.add("button", undefined, "+ Add Step");
                 addS4StepBtn.alignment   = ["left", "center"];
                 addS4StepBtn.minimumSize = [100, 24];
-                addS4StepBtn.onClick = function () { addRowS4(); relayout(); };
+                addS4StepBtn.onClick = function () {
+                    syncToDataS4();
+                    s4StepData.push({ title: "", body: "" });
+                    s4ScrollOffset = Math.max(0, s4StepData.length - VISIBLE_STEPS);
+                    renderRowsS4();
+                };
 
             } else {
                 // ================================================================
@@ -622,11 +703,12 @@
                 var workingPage = activePage;
 
                 if (selectedScale === "S4") {
-                    // ---- S4: collect dual-field steps ---------------
+                    // ---- S4: flush visible fields then collect from s4StepData ----
+                    syncToDataS4();
                     var s4Steps = [];
-                    for (var i = 0; i < s4Rows.length; i++) {
-                        var t = s4Rows[i].titleField.text;
-                        var b = s4Rows[i].bodyField.text;
+                    for (var i = 0; i < s4StepData.length; i++) {
+                        var t = s4StepData[i].title;
+                        var b = s4StepData[i].body;
                         if (t.replace(/\s/g, "") !== "" || b.replace(/\s/g, "") !== "") {
                             s4Steps.push({ title: t, body: b });
                         }
