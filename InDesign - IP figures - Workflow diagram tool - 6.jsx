@@ -13,53 +13,6 @@
         // UTILITIES
         // =====================================================
 
-        function getPagesWithMaster(doc, scalePrefix) {
-            var result = [];
-            for (var i = 0; i < doc.pages.length; i++) {
-                var page = doc.pages[i];
-                try {
-                    if (
-                        page.appliedMaster !== null &&
-                        page.appliedMaster.isValid &&
-                        page.appliedMaster.name.indexOf(scalePrefix) !== -1
-                    ) {
-                        result.push(page);
-                    }
-                } catch (e) {}
-            }
-            return result;
-        }
-
-        function pageHasTextBoxContent(page) {
-            try {
-                var items = page.allPageItems;
-                for (var i = 0; i < items.length; i++) {
-                    var item = items[i];
-                    try {
-                        if (item.name && item.name.indexOf("Object_TextBox") === 0) {
-                            var contents = "";
-                            try { contents = item.contents; } catch (e2) {}
-                            if (contents.replace(/[\r\n\s]/g, "").length > 0) {
-                                return true;
-                            }
-                        }
-                    } catch (e) {}
-                }
-            } catch (e) {}
-            return false;
-        }
-
-        function findMasterByName(doc, scalePrefix) {
-            for (var i = 0; i < doc.masterSpreads.length; i++) {
-                try {
-                    if (doc.masterSpreads[i].name.indexOf(scalePrefix) !== -1) {
-                        return doc.masterSpreads[i];
-                    }
-                } catch (e) {}
-            }
-            return null;
-        }
-
         function detectScaleFromPage(page) {
             try {
                 if (!page || !page.isValid) { return null; }
@@ -71,42 +24,6 @@
                 }
                 return null;
             } catch (e) { return null; }
-        }
-
-        function resolveWorkingPage(doc, scalePrefix) {
-            var pages = getPagesWithMaster(doc, scalePrefix);
-
-            if (pages.length === 0) {
-                var master = findMasterByName(doc, scalePrefix);
-                if (!master) {
-                    alert(
-                        "No master spread containing \"" + scalePrefix + "\" found in this document.\n\n" +
-                        "Please add a master spread with \"" + scalePrefix + "\" in its name."
-                    );
-                    return null;
-                }
-                var autoPage = doc.pages.add(LocationOptions.AT_END);
-                autoPage.appliedMaster = master;
-                return autoPage;
-            }
-
-            var masterToApply = pages[0].appliedMaster;
-            var cleanPage = null;
-
-            for (var i = 0; i < pages.length; i++) {
-                if (!pageHasTextBoxContent(pages[i])) {
-                    cleanPage = pages[i];
-                    break;
-                }
-            }
-
-            if (cleanPage === null) {
-                var newPage = doc.pages.add(LocationOptions.AT_END);
-                newPage.appliedMaster = masterToApply;
-                return newPage;
-            }
-
-            return cleanPage;
         }
 
         // =====================================================
@@ -289,14 +206,6 @@
             var s4ScrollOffset = 0;
             var syncToDataS4   = null;
             var renderRowsS4   = null;
-
-            function relayout() {
-                var loc = dlg.location ? [dlg.location[0], dlg.location[1]] : null;
-                dlg.layout.layout(true);
-                dlg.size = [dlg.size[0], DIALOG_HEIGHT];
-                if (loc) { dlg.location = loc; }
-                dlg.update();
-            }
 
             if (detectedScale === "S4") {
                 // ================================================================
@@ -728,8 +637,8 @@
                     // ---- S1/S2/S3: flush visible fields then collect from stepData ----
                     syncToData();
                     var steps = [];
-                    for (var i = 0; i < stepData.length; i++) {
-                        var val = stepData[i];
+                    for (var si = 0; si < stepData.length; si++) {
+                        var val = stepData[si];
                         if (val.replace(/\s/g, "") !== "") { steps.push(val); }
                     }
                     if (steps.length === 0) {
@@ -811,26 +720,6 @@
                 bottom : b[2],
                 right  : b[3]
             };
-        }
-
-        /**
-         * Returns a human-readable label for the document's current
-         * horizontal measurement units (matches the transform panel).
-         */
-        function getUnitLabel(doc) {
-            try {
-                var u = doc.viewPreferences.horizontalMeasurementUnits;
-                var map = {};
-                map[MeasurementUnits.POINTS]     = "pt";
-                map[MeasurementUnits.MILLIMETERS] = "mm";
-                map[MeasurementUnits.CENTIMETERS] = "cm";
-                map[MeasurementUnits.INCHES]      = "in";
-                map[MeasurementUnits.PICAS]       = "pica";
-                map[MeasurementUnits.PIXELS]      = "px";
-                return map[u] || "doc units";
-            } catch (e) {
-                return "doc units";
-            }
         }
 
         /**
@@ -1353,9 +1242,9 @@
                 }
             } catch (e) {}
             try {
-                var items = container.allPageItems;
-                for (var i = 0; i < items.length; i++) {
-                    if (items[i].name === name) { return items[i]; }
+                var allItems = container.allPageItems;
+                for (var ai = 0; ai < allItems.length; ai++) {
+                    if (allItems[ai].name === name) { return allItems[ai]; }
                 }
             } catch (e) {}
             return null;
