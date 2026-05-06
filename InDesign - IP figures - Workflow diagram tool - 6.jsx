@@ -13,53 +13,6 @@
         // UTILITIES
         // =====================================================
 
-        function getPagesWithMaster(doc, scalePrefix) {
-            var result = [];
-            for (var i = 0; i < doc.pages.length; i++) {
-                var page = doc.pages[i];
-                try {
-                    if (
-                        page.appliedMaster !== null &&
-                        page.appliedMaster.isValid &&
-                        page.appliedMaster.name.indexOf(scalePrefix) !== -1
-                    ) {
-                        result.push(page);
-                    }
-                } catch (e) {}
-            }
-            return result;
-        }
-
-        function pageHasTextBoxContent(page) {
-            try {
-                var items = page.allPageItems;
-                for (var i = 0; i < items.length; i++) {
-                    var item = items[i];
-                    try {
-                        if (item.name && item.name.indexOf("Object_TextBox") === 0) {
-                            var contents = "";
-                            try { contents = item.contents; } catch (e2) {}
-                            if (contents.replace(/[\r\n\s]/g, "").length > 0) {
-                                return true;
-                            }
-                        }
-                    } catch (e) {}
-                }
-            } catch (e) {}
-            return false;
-        }
-
-        function findMasterByName(doc, scalePrefix) {
-            for (var i = 0; i < doc.masterSpreads.length; i++) {
-                try {
-                    if (doc.masterSpreads[i].name.indexOf(scalePrefix) !== -1) {
-                        return doc.masterSpreads[i];
-                    }
-                } catch (e) {}
-            }
-            return null;
-        }
-
         function detectScaleFromPage(page) {
             try {
                 if (!page || !page.isValid) { return null; }
@@ -71,42 +24,6 @@
                 }
                 return null;
             } catch (e) { return null; }
-        }
-
-        function resolveWorkingPage(doc, scalePrefix) {
-            var pages = getPagesWithMaster(doc, scalePrefix);
-
-            if (pages.length === 0) {
-                var master = findMasterByName(doc, scalePrefix);
-                if (!master) {
-                    alert(
-                        "No master spread containing \"" + scalePrefix + "\" found in this document.\n\n" +
-                        "Please add a master spread with \"" + scalePrefix + "\" in its name."
-                    );
-                    return null;
-                }
-                var autoPage = doc.pages.add(LocationOptions.AT_END);
-                autoPage.appliedMaster = master;
-                return autoPage;
-            }
-
-            var masterToApply = pages[0].appliedMaster;
-            var cleanPage = null;
-
-            for (var i = 0; i < pages.length; i++) {
-                if (!pageHasTextBoxContent(pages[i])) {
-                    cleanPage = pages[i];
-                    break;
-                }
-            }
-
-            if (cleanPage === null) {
-                var newPage = doc.pages.add(LocationOptions.AT_END);
-                newPage.appliedMaster = masterToApply;
-                return newPage;
-            }
-
-            return cleanPage;
         }
 
         // =====================================================
@@ -289,14 +206,6 @@
             var s4ScrollOffset = 0;
             var syncToDataS4   = null;
             var renderRowsS4   = null;
-
-            function relayout() {
-                var loc = dlg.location ? [dlg.location[0], dlg.location[1]] : null;
-                dlg.layout.layout(true);
-                dlg.size = [dlg.size[0], DIALOG_HEIGHT];
-                if (loc) { dlg.location = loc; }
-                dlg.update();
-            }
 
             if (detectedScale === "S4") {
                 // ================================================================
@@ -661,8 +570,11 @@
             okBtn.minimumSize = [80, 24];
 
             // ---- CSV Handler --------------------------------
-            // S1/S2/S3: single-column CSV (one step per row/cell).
-            // S4:       two-column CSV — col A = Title, col B = Body.
+            // S4:       two-column CSV — col A = Title, col B = Body (format unchanged).
+            // S1/S2/S3: three-section CSV —
+            //   Row 1: scale identifier (S1, S2, or S3)
+            //   Row 2: diagram title (populates Diagram Name field)
+            //   Rows 3+: flowchart step texts
             csvBtn.onClick = function () {
                 var file = File.openDialog(
                     "Select a CSV file",
@@ -678,16 +590,55 @@
                     }
                     populateRowsS4(s4Steps);
                 } else {
-                    var steps = parseCSV(file);
-                    if (steps.length === 0) {
+                    var cells = parseCSV(file);
+                    if (cells.length < 3) {
                         alert(
-                            "The selected CSV file contained no readable step labels.\n\n" +
-                            "Check that the file is not empty and uses UTF-8 or plain ASCII encoding."
+                            "CSV must have at least 3 rows:\n" +
+                            "  Row 1 — Scale (S1, S2, or S3)\n" +
+                            "  Row 2 — Diagram title\n" +
+                            "  Row 3+ — Flowchart steps\n\n" +
+                            "The selected file has " + cells.length + " non-blank row(s)."
                         );
                         return;
                     }
-                    stepData = steps;
-                    scrollOffset = 0;
+
+                    var csvScale = cells[0].replace(/[\r\n\s]/g, "");
+                    var csvTitle = cells[1].replace(/[\r\n]/g, "");
+                    var csvSteps = cells.slice(2);
+
+                    var validScales = { S1: true, S2: true, S3: true };
+                    if (!validScales[csvScale]) {
+                        alert("Row 1 must be S1, S2, or S3.\n\nFound: \"" + csvScale + "\"");
+                        return;
+                    }
+                    if (csvScale !== currentScale) {
+                        alert(
+                            "Scale mismatch.\n\n" +
+                            "CSV specifies: " + csvScale + "\n" +
+                            "Active page:   " + currentScale + "\n\n" +
+                            "Open or create a page with an " + csvScale +
+                            " master applied, then re-run the script."
+                        );
+                        return;
+                    }
+
+                    var preview = "Scale:  " + csvScale +
+                                  "\nTitle:  " + csvTitle +
+                                  "\nSteps:  " + csvSteps.length;
+                    for (var pi = 0; pi < Math.min(csvSteps.length, 5); pi++) {
+                        var snippet = csvSteps[pi].replace(/\r/g, " ↵ ");
+                        if (snippet.length > 60) { snippet = snippet.substring(0, 57) + "…"; }
+                        preview += "\n  " + (pi + 1) + ". " + snippet;
+                    }
+                    if (csvSteps.length > 5) {
+                        preview += "\n  … (" + (csvSteps.length - 5) + " more)";
+                    }
+
+                    if (!confirm("Load from CSV?\n\n" + preview)) { return; }
+
+                    titleInput.text = csvTitle;
+                    stepData        = csvSteps;
+                    scrollOffset    = 0;
                     renderRows();
                 }
             };
@@ -728,8 +679,8 @@
                     // ---- S1/S2/S3: flush visible fields then collect from stepData ----
                     syncToData();
                     var steps = [];
-                    for (var i = 0; i < stepData.length; i++) {
-                        var val = stepData[i];
+                    for (var si = 0; si < stepData.length; si++) {
+                        var val = stepData[si];
                         if (val.replace(/\s/g, "") !== "") { steps.push(val); }
                     }
                     if (steps.length === 0) {
@@ -811,26 +762,6 @@
                 bottom : b[2],
                 right  : b[3]
             };
-        }
-
-        /**
-         * Returns a human-readable label for the document's current
-         * horizontal measurement units (matches the transform panel).
-         */
-        function getUnitLabel(doc) {
-            try {
-                var u = doc.viewPreferences.horizontalMeasurementUnits;
-                var map = {};
-                map[MeasurementUnits.POINTS]     = "pt";
-                map[MeasurementUnits.MILLIMETERS] = "mm";
-                map[MeasurementUnits.CENTIMETERS] = "cm";
-                map[MeasurementUnits.INCHES]      = "in";
-                map[MeasurementUnits.PICAS]       = "pica";
-                map[MeasurementUnits.PIXELS]      = "px";
-                return map[u] || "doc units";
-            } catch (e) {
-                return "doc units";
-            }
         }
 
         /**
@@ -1353,9 +1284,9 @@
                 }
             } catch (e) {}
             try {
-                var items = container.allPageItems;
-                for (var i = 0; i < items.length; i++) {
-                    if (items[i].name === name) { return items[i]; }
+                var allItems = container.allPageItems;
+                for (var ai = 0; ai < allItems.length; ai++) {
+                    if (allItems[ai].name === name) { return allItems[ai]; }
                 }
             } catch (e) {}
             return null;
