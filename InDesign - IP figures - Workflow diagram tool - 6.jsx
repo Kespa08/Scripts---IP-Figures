@@ -188,7 +188,7 @@
             var titleInput = titlePanel.add("edittext", undefined, "");
             titleInput.minimumSize = [330, 22];
             titleInput.maximumSize = [330, 22];
-            titleInput.helpTip     = "Replaces content of Title_Flowchart on the working page";
+            titleInput.helpTip     = "Replaces content of Text_Header on the working page";
 
             // ---- Shared state — assigned in the conditional block below ----
             var rows           = null; // S1/S2/S3 pool row objects
@@ -1086,7 +1086,7 @@
         // =====================================================
 
         /**
-         * Finds the item named "Title_Flowchart" on the working page
+         * Finds the item named "Text_Header" on the working page
          * (or its master as fallback) and sets its text contents to
          * titleText.
          *
@@ -1097,15 +1097,15 @@
             if (!titleText || titleText.replace(/\s/g, "") === "") { return; }
 
             var titleItem = findItem(workingPage, function (item) {
-                return item.name === "Title_Flowchart";
+                return item.name === "Text_Header";
             });
 
             if (!titleItem) {
                 alert(
-                    "Could not find an object named \"Title_Flowchart\" on the " +
+                    "Could not find an object named \"Text_Header\" on the " +
                     "working page or its master.\n\n" +
                     "The diagram name was not applied. Check the Layers panel and " +
-                    "confirm the object is named exactly \"Title_Flowchart\" (case-sensitive)."
+                    "confirm the object is named exactly \"Text_Header\" (case-sensitive)."
                 );
                 return;
             }
