@@ -611,15 +611,29 @@
                         alert("Row 1 must be S1, S2, or S3.\n\nFound: \"" + csvScale + "\"");
                         return;
                     }
+
+                    // Resolve working page: use active page on match, or create a new
+                    // page with the correct master on mismatch.
+                    var workingPage = activePage;
                     if (csvScale !== currentScale) {
-                        alert(
-                            "Scale mismatch.\n\n" +
-                            "CSV specifies: " + csvScale + "\n" +
-                            "Active page:   " + currentScale + "\n\n" +
-                            "Open or create a page with an " + csvScale +
-                            " master applied, then re-run the script."
-                        );
-                        return;
+                        var csvMaster = null;
+                        for (var mi = 0; mi < doc.masterSpreads.length; mi++) {
+                            if (doc.masterSpreads[mi].name.indexOf(csvScale) !== -1) {
+                                csvMaster = doc.masterSpreads[mi];
+                                break;
+                            }
+                        }
+                        if (!csvMaster) {
+                            alert(
+                                "No master spread found for scale \"" + csvScale + "\".\n\n" +
+                                "Add a master spread with \"" + csvScale + "\" in its name, then try again."
+                            );
+                            return;
+                        }
+                        var newPage = doc.pages.add(LocationOptions.AT_END);
+                        newPage.appliedMaster = csvMaster;
+                        try { newPage.parent.overrideAllMasterPageItems(); } catch (e) {}
+                        workingPage = newPage;
                     }
 
                     var preview = "Scale:  " + csvScale +
@@ -641,7 +655,7 @@
                     result = {
                         scale      : csvScale,
                         steps      : csvSteps,
-                        workingPage: activePage,
+                        workingPage: workingPage,
                         title      : csvTitle
                     };
                     dlg.close();
