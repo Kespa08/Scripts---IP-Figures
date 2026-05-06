@@ -570,8 +570,11 @@
             okBtn.minimumSize = [80, 24];
 
             // ---- CSV Handler --------------------------------
-            // S1/S2/S3: single-column CSV (one step per row/cell).
-            // S4:       two-column CSV — col A = Title, col B = Body.
+            // S4:       two-column CSV — col A = Title, col B = Body (format unchanged).
+            // S1/S2/S3: three-section CSV —
+            //   Row 1: scale identifier (S1, S2, or S3)
+            //   Row 2: diagram title (populates Diagram Name field)
+            //   Rows 3+: flowchart step texts
             csvBtn.onClick = function () {
                 var file = File.openDialog(
                     "Select a CSV file",
@@ -587,16 +590,55 @@
                     }
                     populateRowsS4(s4Steps);
                 } else {
-                    var steps = parseCSV(file);
-                    if (steps.length === 0) {
+                    var cells = parseCSV(file);
+                    if (cells.length < 3) {
                         alert(
-                            "The selected CSV file contained no readable step labels.\n\n" +
-                            "Check that the file is not empty and uses UTF-8 or plain ASCII encoding."
+                            "CSV must have at least 3 rows:\n" +
+                            "  Row 1 — Scale (S1, S2, or S3)\n" +
+                            "  Row 2 — Diagram title\n" +
+                            "  Row 3+ — Flowchart steps\n\n" +
+                            "The selected file has " + cells.length + " non-blank row(s)."
                         );
                         return;
                     }
-                    stepData = steps;
-                    scrollOffset = 0;
+
+                    var csvScale = cells[0].replace(/[\r\n\s]/g, "");
+                    var csvTitle = cells[1].replace(/[\r\n]/g, "");
+                    var csvSteps = cells.slice(2);
+
+                    var validScales = { S1: true, S2: true, S3: true };
+                    if (!validScales[csvScale]) {
+                        alert("Row 1 must be S1, S2, or S3.\n\nFound: \"" + csvScale + "\"");
+                        return;
+                    }
+                    if (csvScale !== currentScale) {
+                        alert(
+                            "Scale mismatch.\n\n" +
+                            "CSV specifies: " + csvScale + "\n" +
+                            "Active page:   " + currentScale + "\n\n" +
+                            "Open or create a page with an " + csvScale +
+                            " master applied, then re-run the script."
+                        );
+                        return;
+                    }
+
+                    var preview = "Scale:  " + csvScale +
+                                  "\nTitle:  " + csvTitle +
+                                  "\nSteps:  " + csvSteps.length;
+                    for (var pi = 0; pi < Math.min(csvSteps.length, 5); pi++) {
+                        var snippet = csvSteps[pi].replace(/\r/g, " ↵ ");
+                        if (snippet.length > 60) { snippet = snippet.substring(0, 57) + "…"; }
+                        preview += "\n  " + (pi + 1) + ". " + snippet;
+                    }
+                    if (csvSteps.length > 5) {
+                        preview += "\n  … (" + (csvSteps.length - 5) + " more)";
+                    }
+
+                    if (!confirm("Load from CSV?\n\n" + preview)) { return; }
+
+                    titleInput.text = csvTitle;
+                    stepData        = csvSteps;
+                    scrollOffset    = 0;
                     renderRows();
                 }
             };
