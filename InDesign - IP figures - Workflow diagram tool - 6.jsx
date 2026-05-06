@@ -576,6 +576,7 @@
             //   Row 2: diagram title (populates Diagram Name field)
             //   Rows 3+: flowchart step texts
             csvBtn.onClick = function () {
+                try {
                 var file = File.openDialog(
                     "Select a CSV file",
                     "CSV Files:*.csv,Text Files:*.txt,All Files:*.*"
@@ -612,11 +613,11 @@
                         return;
                     }
 
-                    // Resolve working page: use active page on match, or create a new
-                    // page with the correct master on mismatch.
-                    var workingPage = activePage;
+                    // Find master for mismatch case — but do NOT create the page yet.
+                    // Page creation happens after the user confirms, to avoid orphaned
+                    // pages if they cancel.
+                    var csvMaster = null;
                     if (csvScale !== currentScale) {
-                        var csvMaster = null;
                         for (var mi = 0; mi < doc.masterSpreads.length; mi++) {
                             if (doc.masterSpreads[mi].name.indexOf(csvScale) !== -1) {
                                 csvMaster = doc.masterSpreads[mi];
@@ -630,15 +631,14 @@
                             );
                             return;
                         }
-                        var newPage = doc.pages.add(LocationOptions.AT_END);
-                        newPage.appliedMaster = csvMaster;
-                        try { newPage.parent.overrideAllMasterPageItems(); } catch (e) {}
-                        workingPage = newPage;
                     }
 
                     var preview = "Scale:  " + csvScale +
                                   "\nTitle:  " + csvTitle +
                                   "\nSteps:  " + csvSteps.length;
+                    if (csvScale !== currentScale) {
+                        preview += "\n\n(A new " + csvScale + " page will be created)";
+                    }
                     for (var pi = 0; pi < Math.min(csvSteps.length, 5); pi++) {
                         var snippet = csvSteps[pi].replace(/\r/g, " ↵ ");
                         if (snippet.length > 60) { snippet = snippet.substring(0, 57) + "…"; }
@@ -650,8 +650,15 @@
 
                     if (!confirm("Load from CSV?\n\n" + preview)) { return; }
 
-                    // Build result directly and close — same output as OK button,
-                    // bypassing the manual step-entry flow entirely.
+                    // Resolve working page now that the user has confirmed.
+                    var workingPage = activePage;
+                    if (csvMaster) {
+                        var newPage = doc.pages.add(LocationOptions.AT_END);
+                        newPage.appliedMaster = csvMaster;
+                        try { newPage.parent.overrideAllMasterPageItems(); } catch (e2) {}
+                        workingPage = newPage;
+                    }
+
                     result = {
                         scale      : csvScale,
                         steps      : csvSteps,
@@ -659,6 +666,9 @@
                         title      : csvTitle
                     };
                     dlg.close();
+                }
+                } catch (csvErr) {
+                    alert("CSV load failed.\n\nError: " + csvErr.message + "\nLine: " + csvErr.line);
                 }
             };
 
