@@ -636,10 +636,15 @@
 
                     if (!confirm("Load from CSV?\n\n" + preview)) { return; }
 
-                    titleInput.text = csvTitle;
-                    stepData        = csvSteps;
-                    scrollOffset    = 0;
-                    renderRows();
+                    // Build result directly and close — same output as OK button,
+                    // bypassing the manual step-entry flow entirely.
+                    result = {
+                        scale      : csvScale,
+                        steps      : csvSteps,
+                        workingPage: activePage,
+                        title      : csvTitle
+                    };
+                    dlg.close();
                 }
             };
 
