@@ -650,19 +650,15 @@
 
                     if (!confirm("Load from CSV?\n\n" + preview)) { return; }
 
-                    // Resolve working page now that the user has confirmed.
-                    var workingPage = activePage;
-                    if (csvMaster) {
-                        var newPage = doc.pages.add(LocationOptions.AT_END);
-                        newPage.appliedMaster = csvMaster;
-                        try { newPage.parent.overrideAllMasterPageItems(); } catch (e2) {}
-                        workingPage = newPage;
-                    }
-
+                    // Page creation deferred to after the dialog closes:
+                    // InDesign forbids document modification while a modal dialog
+                    // is active. workingPage: null signals the main execution block
+                    // to create the page using csvMaster before Phase 2 runs.
                     result = {
                         scale      : csvScale,
                         steps      : csvSteps,
-                        workingPage: workingPage,
+                        workingPage: csvMaster ? null : activePage,
+                        csvMaster  : csvMaster,
                         title      : csvTitle
                     };
                     dlg.close();
@@ -1502,6 +1498,21 @@
             // --- Phase 1: Dialog ---
             var result = buildDialog(doc, activePage, detectedScale);
             if (!result) { docError = true; } // user cancelled
+
+            // --- CSV new-page creation (deferred from dialog to here) ---
+            // Document modification is forbidden while a modal dialog is open,
+            // so the CSV handler signals intent via result.csvMaster. The page
+            // is created here, after the dialog has closed.
+            if (!docError && result.csvMaster) {
+                try {
+                    var csvNewPage = doc.pages.add(LocationOptions.AT_END);
+                    csvNewPage.appliedMaster = result.csvMaster;
+                    result.workingPage = csvNewPage;
+                } catch (e) {
+                    alert("Could not create new page for scale " + result.scale + ":\n\n" + e.message);
+                    docError = true;
+                }
+            }
 
             // --- Override master items so locked items become editable ---
             if (!docError) {
