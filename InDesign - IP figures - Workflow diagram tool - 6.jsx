@@ -151,6 +151,70 @@
         }
 
         // =====================================================
+        // CSV PARSER -- multi-column grid format
+        // Parses CSV into a 2D array grid[row][col].
+        // Shorter rows are padded with "" to match the longest row.
+        // Internal newlines in cells are converted to \r for InDesign.
+        // =====================================================
+        function parseCSVGrid(file) {
+            file.open("r");
+            var raw = file.read();
+            file.close();
+            raw = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+            var pos = 0, len = raw.length;
+
+            function readField() {
+                if (pos >= len) { return null; }
+                var val = "";
+                if (raw.charAt(pos) === "\"") {
+                    pos++;
+                    while (pos < len) {
+                        var ch = raw.charAt(pos);
+                        if (ch === "\"") {
+                            if (raw.charAt(pos + 1) === "\"") { val += "\""; pos += 2; }
+                            else { pos++; break; }
+                        } else { val += ch; pos++; }
+                    }
+                } else {
+                    while (pos < len && raw.charAt(pos) !== "," && raw.charAt(pos) !== "\n") {
+                        val += raw.charAt(pos); pos++;
+                    }
+                }
+                return val.replace(/\n/g, "\r");
+            }
+
+            var grid = [];
+            while (pos < len) {
+                var row = [];
+                var field = readField();
+                if (field === null) { break; }
+                row.push(field);
+                while (pos < len && raw.charAt(pos) === ",") {
+                    pos++;
+                    var f = readField();
+                    row.push(f !== null ? f : "");
+                }
+                if (pos < len && raw.charAt(pos) === "\n") { pos++; }
+                // Skip completely blank rows
+                var rowBlank = true;
+                for (var ri = 0; ri < row.length; ri++) {
+                    if (row[ri].replace(/[\r\n\s]/g, "") !== "") { rowBlank = false; break; }
+                }
+                if (!rowBlank) { grid.push(row); }
+            }
+
+            // Pad shorter rows to match the widest
+            var numCols = 0;
+            for (var r = 0; r < grid.length; r++) {
+                if (grid[r].length > numCols) { numCols = grid[r].length; }
+            }
+            for (var r2 = 0; r2 < grid.length; r2++) {
+                while (grid[r2].length < numCols) { grid[r2].push(""); }
+            }
+            return grid;
+        }
+
+        // =====================================================
         // DIALOG
         // =====================================================
         function buildDialog(doc, activePage, detectedScale) {
@@ -591,76 +655,96 @@
                     }
                     populateRowsS4(s4Steps);
                 } else {
-                    var cells = parseCSV(file);
-                    if (cells.length < 3) {
-                        alert(
-                            "CSV must have at least 3 rows:\n" +
-                            "  Row 1 — Scale (S1, S2, or S3)\n" +
-                            "  Row 2 — Diagram title\n" +
-                            "  Row 3+ — Flowchart steps\n\n" +
-                            "The selected file has " + cells.length + " non-blank row(s)."
-                        );
+                    var grid = parseCSVGrid(file);
+
+                    if (grid.length === 0 || grid[0].length === 0) {
+                        alert("The selected CSV file is empty or contains no readable data.");
                         return;
                     }
 
-                    var csvScale = cells[0].replace(/[\r\n\s]/g, "");
-                    var csvTitle = cells[1].replace(/[\r\n]/g, "");
-                    var csvSteps = cells.slice(2);
-
+                    var numCols    = grid[0].length;
                     var validScales = { S1: true, S2: true, S3: true };
-                    if (!validScales[csvScale]) {
-                        alert("Row 1 must be S1, S2, or S3.\n\nFound: \"" + csvScale + "\"");
-                        return;
-                    }
+                    var diagrams   = [];  // valid diagram specs
+                    var invalids   = [];  // { col, reason }
+                    var usedActivePage = false;
 
-                    // Find master for mismatch case — but do NOT create the page yet.
-                    // Page creation happens after the user confirms, to avoid orphaned
-                    // pages if they cancel.
-                    var csvMaster = null;
-                    if (csvScale !== currentScale) {
+                    var findMasterForScale = function (scale) {
                         for (var mi = 0; mi < doc.masterSpreads.length; mi++) {
-                            if (doc.masterSpreads[mi].name.indexOf(csvScale) !== -1) {
-                                csvMaster = doc.masterSpreads[mi];
-                                break;
+                            if (doc.masterSpreads[mi].name.indexOf(scale) !== -1) {
+                                return doc.masterSpreads[mi];
                             }
                         }
-                        if (!csvMaster) {
-                            alert(
-                                "No master spread found for scale \"" + csvScale + "\".\n\n" +
-                                "Add a master spread with \"" + csvScale + "\" in its name, then try again."
-                            );
-                            return;
+                        return null;
+                    };
+
+                    for (var c = 0; c < numCols; c++) {
+                        var colNum   = c + 1;
+                        var colScale = (grid[0][c] || "").replace(/[\r\n\s]/g, "");
+                        var colTitle = (grid.length > 1 ? (grid[1][c] || "") : "").replace(/[\r\n]/g, "");
+
+                        // Collect non-blank step cells (rows 2+)
+                        var colSteps = [];
+                        for (var sr = 2; sr < grid.length; sr++) {
+                            var cell = grid[sr][c] || "";
+                            if (cell.replace(/[\r\n\s]/g, "") !== "") { colSteps.push(cell); }
                         }
+
+                        if (!validScales[colScale]) {
+                            invalids.push({ col: colNum, reason: "\"" + colScale + "\" is not a valid scale (must be S1, S2, or S3)" });
+                            continue;
+                        }
+                        if (colSteps.length === 0) {
+                            invalids.push({ col: colNum, reason: "no steps found (rows 3+ are all blank)" });
+                            continue;
+                        }
+
+                        // Determine master: first column whose scale matches the active page
+                        // gets activePage; all others (even same scale) get a new page.
+                        var colMaster = null;
+                        if (colScale === currentScale && !usedActivePage) {
+                            colMaster = null; // signal to use activePage in build loop
+                            usedActivePage = true;
+                        } else {
+                            colMaster = findMasterForScale(colScale);
+                            if (!colMaster) {
+                                invalids.push({ col: colNum, reason: "no master spread found for scale " + colScale });
+                                continue;
+                            }
+                        }
+
+                        diagrams.push({ col: colNum, scale: colScale, title: colTitle, steps: colSteps, csvMaster: colMaster });
                     }
 
-                    var preview = "Scale:  " + csvScale +
-                                  "\nTitle:  " + csvTitle +
-                                  "\nSteps:  " + csvSteps.length;
-                    if (csvScale !== currentScale) {
-                        preview += "\n\n(A new " + csvScale + " page will be created)";
+                    // All-or-nothing gate
+                    if (invalids.length > 0) {
+                        var report = "CSV validation failed — no diagrams will be built.\n";
+                        if (diagrams.length > 0) {
+                            report += "\nValid columns (" + diagrams.length + "):";
+                            for (var vi = 0; vi < diagrams.length; vi++) {
+                                report += "\n  Col " + diagrams[vi].col + " — " + diagrams[vi].scale + " \"" + diagrams[vi].title + "\" (" + diagrams[vi].steps.length + " steps)";
+                            }
+                        }
+                        report += "\n\nInvalid columns (" + invalids.length + "):";
+                        for (var ii = 0; ii < invalids.length; ii++) {
+                            report += "\n  Col " + invalids[ii].col + " — " + invalids[ii].reason;
+                        }
+                        alert(report);
+                        return;
                     }
-                    for (var pi = 0; pi < Math.min(csvSteps.length, 5); pi++) {
-                        var snippet = csvSteps[pi].replace(/\r/g, " ↵ ");
-                        if (snippet.length > 60) { snippet = snippet.substring(0, 57) + "…"; }
-                        preview += "\n  " + (pi + 1) + ". " + snippet;
-                    }
-                    if (csvSteps.length > 5) {
-                        preview += "\n  … (" + (csvSteps.length - 5) + " more)";
+
+                    // Build confirm preview
+                    var preview = diagrams.length + " diagram" + (diagrams.length > 1 ? "s" : "") + " to build:\n";
+                    for (var di = 0; di < diagrams.length; di++) {
+                        var d = diagrams[di];
+                        preview += "\n  " + d.col + ". " + d.scale + "  \"" + d.title + "\"  — " + d.steps.length + " step" + (d.steps.length !== 1 ? "s" : "");
+                        if (d.csvMaster) { preview += "  (new page)"; }
                     }
 
                     if (!confirm("Load from CSV?\n\n" + preview)) { return; }
 
-                    // Page creation deferred to after the dialog closes:
-                    // InDesign forbids document modification while a modal dialog
-                    // is active. workingPage: null signals the main execution block
-                    // to create the page using csvMaster before Phase 2 runs.
-                    result = {
-                        scale      : csvScale,
-                        steps      : csvSteps,
-                        workingPage: csvMaster ? null : activePage,
-                        csvMaster  : csvMaster,
-                        title      : csvTitle
-                    };
+                    // Page creation is deferred to the main execution block —
+                    // InDesign forbids doc modification while a modal dialog is open.
+                    result = { diagrams: diagrams };
                     dlg.close();
                 }
                 } catch (csvErr) {
@@ -1499,75 +1583,118 @@
             var result = buildDialog(doc, activePage, detectedScale);
             if (!result) { docError = true; } // user cancelled
 
-            // --- CSV new-page creation (deferred from dialog to here) ---
-            // Document modification is forbidden while a modal dialog is open,
-            // so the CSV handler signals intent via result.csvMaster. The page
-            // is created here, after the dialog has closed.
-            if (!docError && result.csvMaster) {
-                try {
-                    var csvNewPage = doc.pages.add(LocationOptions.AT_END);
-                    csvNewPage.appliedMaster = result.csvMaster;
-                    result.workingPage = csvNewPage;
-                } catch (e) {
-                    alert("Could not create new page for scale " + result.scale + ":\n\n" + e.message);
-                    docError = true;
-                }
-            }
-
-            // --- Override master items so locked items become editable ---
             if (!docError) {
-                try { result.workingPage.parent.overrideAllMasterPageItems(); } catch (e) {}
-            }
 
-            // --- Phase 2: Template object detection ---
-            if (!docError) {
-                var templateData = detectTemplateObjects(
-                    doc, result.workingPage, result.scale
-                );
-                if (!templateData) { docError = true; }
-            }
+                if (result.diagrams) {
+                    // ---- Multi-diagram CSV path ----
+                    // Page creation happens here (after dialog closed) because InDesign
+                    // forbids document modification while a modal dialog is active.
+                    var builtCount  = 0;
+                    var buildErrors = [];
 
-            // --- Title population (between Phase 2 and 3) ---
-            if (!docError && result.title) {
-                setFlowchartTitle(result.workingPage, result.title);
-            }
+                    for (var di = 0; di < result.diagrams.length; di++) {
+                        var spec     = result.diagrams[di];
+                        var specPage = null;
 
-            // --- S4 header population (Text_T1 / Text_T2) ---
-            if (!docError && result.scale === "S4" && result.s4Header) {
-                var hdr = result.s4Header;
-                if (hdr.t1 && hdr.t1.replace(/\s/g, "") !== "") {
-                    var t1Item = findItem(result.workingPage, function (item) {
-                        return item.name === "Text_T1";
-                    });
-                    if (t1Item) { try { t1Item.contents = hdr.t1; } catch (e) {} }
+                        if (spec.csvMaster) {
+                            try {
+                                var newSpecPage = doc.pages.add(LocationOptions.AT_END);
+                                newSpecPage.appliedMaster = spec.csvMaster;
+                                specPage = newSpecPage;
+                            } catch (e) {
+                                buildErrors.push("Col " + spec.col + ": could not create page — " + e.message);
+                                break;
+                            }
+                        } else {
+                            specPage = activePage;
+                        }
+
+                        try { specPage.parent.overrideAllMasterPageItems(); } catch (e) {}
+
+                        var specTpl = detectTemplateObjects(doc, specPage, spec.scale);
+                        if (!specTpl) {
+                            buildErrors.push("Col " + spec.col + ": template objects not found for scale " + spec.scale);
+                            break;
+                        }
+
+                        setFlowchartTitle(specPage, spec.title);
+                        executePhase3(doc, specPage, spec, specTpl);
+                        builtCount++;
+                    }
+
+                    if (buildErrors.length > 0) {
+                        alert(
+                            "CSV build stopped early.\n\n" +
+                            "Built: " + builtCount + " of " + result.diagrams.length + " diagrams.\n\n" +
+                            "Error:\n" + buildErrors.join("\n")
+                        );
+                    } else {
+                        alert(
+                            "CSV build complete.\n\n" +
+                            builtCount + " diagram" + (builtCount !== 1 ? "s" : "") + " built successfully."
+                        );
+                    }
+
+                } else {
+                    // ---- Single-diagram path (manual dialog or legacy) ----
+
+                    // CSV new-page creation deferred from the dialog handler
+                    if (result.csvMaster) {
+                        try {
+                            var csvNewPage = doc.pages.add(LocationOptions.AT_END);
+                            csvNewPage.appliedMaster = result.csvMaster;
+                            result.workingPage = csvNewPage;
+                        } catch (e) {
+                            alert("Could not create new page for scale " + result.scale + ":\n\n" + e.message);
+                            docError = true;
+                        }
+                    }
+
+                    if (!docError) {
+                        try { result.workingPage.parent.overrideAllMasterPageItems(); } catch (e) {}
+                    }
+
+                    if (!docError) {
+                        var templateData = detectTemplateObjects(doc, result.workingPage, result.scale);
+                        if (!templateData) { docError = true; }
+                    }
+
+                    if (!docError && result.title) {
+                        setFlowchartTitle(result.workingPage, result.title);
+                    }
+
+                    if (!docError && result.scale === "S4" && result.s4Header) {
+                        var hdr = result.s4Header;
+                        if (hdr.t1 && hdr.t1.replace(/\s/g, "") !== "") {
+                            var t1Item = findItem(result.workingPage, function (item) {
+                                return item.name === "Text_T1";
+                            });
+                            if (t1Item) { try { t1Item.contents = hdr.t1; } catch (e) {} }
+                        }
+                        if (hdr.t2 && hdr.t2.replace(/\s/g, "") !== "") {
+                            var t2Item = findItem(result.workingPage, function (item) {
+                                return item.name === "Text_T2";
+                            });
+                            if (t2Item) { try { t2Item.contents = hdr.t2; } catch (e) {} }
+                        }
+                    }
+
+                    if (!docError) {
+                        var log = executePhase3(doc, result.workingPage, result, templateData);
+                        alert(
+                            "=== Phase 3 QA -- Layout Log ===\n\n" +
+                            "Scale     : " + result.scale + "\n" +
+                            "Boxes     : " + result.steps.length + "\n\n" +
+                            "Stacking (all values in doc units):\n" +
+                            log.join("\n") + "\n\n" +
+                            "Check in InDesign:\n" +
+                            "  - 19.5 pt gap between each box bottom and next box top\n" +
+                            "  - Arrow top = preceding box bottom + 13 pt\n" +
+                            "  - No arrow below the final box\n" +
+                            "  - Text is visible and correctly styled in each box"
+                        );
+                    }
                 }
-                if (hdr.t2 && hdr.t2.replace(/\s/g, "") !== "") {
-                    var t2Item = findItem(result.workingPage, function (item) {
-                        return item.name === "Text_T2";
-                    });
-                    if (t2Item) { try { t2Item.contents = hdr.t2; } catch (e) {} }
-                }
-            }
-
-            // --- Phase 3: Duplicate, inject, position ---
-            if (!docError) {
-                var log = executePhase3(
-                    doc, result.workingPage, result, templateData
-                );
-
-                // QA Stage 3 — verify positions before removing this alert
-                alert(
-                    "=== Phase 3 QA -- Layout Log ===\n\n" +
-                    "Scale     : " + result.scale + "\n" +
-                    "Boxes     : " + result.steps.length + "\n\n" +
-                    "Stacking (all values in doc units):\n" +
-                    log.join("\n") + "\n\n" +
-                    "Check in InDesign:\n" +
-                    "  - 19.5 pt gap between each box bottom and next box top\n" +
-                    "  - Arrow top = preceding box bottom + 13 pt\n" +
-                    "  - No arrow below the final box\n" +
-                    "  - Text is visible and correctly styled in each box"
-                );
             }
         }
 
