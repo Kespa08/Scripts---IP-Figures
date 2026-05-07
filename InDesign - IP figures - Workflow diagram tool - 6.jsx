@@ -717,16 +717,16 @@
 
                     // All-or-nothing gate
                     if (invalids.length > 0) {
-                        var report = "CSV validation failed — no diagrams will be built.\n";
+                        var report = "CSV validation failed - no diagrams will be built.\n";
                         if (diagrams.length > 0) {
                             report += "\nValid columns (" + diagrams.length + "):";
                             for (var vi = 0; vi < diagrams.length; vi++) {
-                                report += "\n  Col " + diagrams[vi].col + " — " + diagrams[vi].scale + " \"" + diagrams[vi].title + "\" (" + diagrams[vi].steps.length + " steps)";
+                                report += "\n  Col " + diagrams[vi].col + " - " + diagrams[vi].scale + " \"" + diagrams[vi].title + "\" (" + diagrams[vi].steps.length + " steps)";
                             }
                         }
                         report += "\n\nInvalid columns (" + invalids.length + "):";
                         for (var ii = 0; ii < invalids.length; ii++) {
-                            report += "\n  Col " + invalids[ii].col + " — " + invalids[ii].reason;
+                            report += "\n  Col " + invalids[ii].col + " - " + invalids[ii].reason;
                         }
                         alert(report);
                         return;
@@ -736,13 +736,13 @@
                     var preview = diagrams.length + " diagram" + (diagrams.length > 1 ? "s" : "") + " to build:\n";
                     for (var di = 0; di < diagrams.length; di++) {
                         var d = diagrams[di];
-                        preview += "\n  " + d.col + ". " + d.scale + "  \"" + d.title + "\"  — " + d.steps.length + " step" + (d.steps.length !== 1 ? "s" : "");
+                        preview += "\n  " + d.col + ". " + d.scale + "  \"" + d.title + "\"  - " + d.steps.length + " step" + (d.steps.length !== 1 ? "s" : "");
                         if (d.csvMaster) { preview += "  (new page)"; }
                     }
 
                     if (!confirm("Load from CSV?\n\n" + preview)) { return; }
 
-                    // Page creation is deferred to the main execution block —
+                    // Page creation is deferred to the main execution block -
                     // InDesign forbids doc modification while a modal dialog is open.
                     result = { diagrams: diagrams };
                     dlg.close();
@@ -1602,7 +1602,7 @@
                                 newSpecPage.appliedMaster = spec.csvMaster;
                                 specPage = newSpecPage;
                             } catch (e) {
-                                buildErrors.push("Col " + spec.col + ": could not create page — " + e.message);
+                                buildErrors.push("Col " + spec.col + ": could not create page - " + e.message);
                                 break;
                             }
                         } else {
