@@ -1609,6 +1609,8 @@
                             specPage = activePage;
                         }
 
+                        spec.workingPage = specPage;
+
                         try { specPage.parent.overrideAllMasterPageItems(); } catch (e) {}
 
                         var specTpl = detectTemplateObjects(doc, specPage, spec.scale);
