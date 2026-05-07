@@ -228,7 +228,7 @@
             dlg.spacing       = 12;
             dlg.margins       = [18, 18, 18, 18];
 
-            var DIALOG_HEIGHT = 520; // logical px — raise or lower to taste
+            var DIALOG_HEIGHT = 520; // logical px - raise or lower to taste
             var VISIBLE_STEPS = 5;  // step rows shown at once; scroll appears beyond this
             dlg.preferredSize = [-1, DIALOG_HEIGHT];
 
@@ -254,7 +254,7 @@
             titleInput.maximumSize = [330, 22];
             titleInput.helpTip     = "Replaces content of Text_Header on the working page";
 
-            // ---- Shared state — assigned in the conditional block below ----
+            // ---- Shared state - assigned in the conditional block below ----
             var rows           = null; // S1/S2/S3 pool row objects
             var s4Rows         = null; // S4 pool row objects
             var s4T1Input      = null; // S4 Title-1 header input
@@ -273,7 +273,7 @@
 
             if (detectedScale === "S4") {
                 // ================================================================
-                // S4 PANEL — fixed-pool, same architecture as S1/S2/S3 panel.
+                // S4 PANEL - fixed-pool, same architecture as S1/S2/S3 panel.
                 // s4StepData[] is the data store; VISIBLE_STEPS DOM rows are built
                 // once and never removed. renderRowsS4() updates content in-place.
                 // ================================================================
@@ -287,7 +287,7 @@
                 s4Panel.spacing       = 8;
                 s4Panel.margins       = [10, 18, 10, 10];
 
-                // Title 1 / Title 2 header inputs — not scrolled, always visible
+                // Title 1 / Title 2 header inputs - not scrolled, always visible
                 var s4HeaderGroup = s4Panel.add("group");
                 s4HeaderGroup.orientation   = "column";
                 s4HeaderGroup.alignChildren = ["fill", "top"];
@@ -469,7 +469,7 @@
 
             } else {
                 // ================================================================
-                // STEPS PANEL (S1/S2/S3) — fixed-pool: all VISIBLE_STEPS rows are
+                // STEPS PANEL (S1/S2/S3) - fixed-pool: all VISIBLE_STEPS rows are
                 // built once at construction. renderRows() updates content in-place
                 // (no DOM mutations, no layout(true)) → no flicker, no size changes.
                 // ================================================================
@@ -500,7 +500,7 @@
                 scrollbar.jumpdelta   = VISIBLE_STEPS;
                 scrollbar.visible     = false;
 
-                // Build the fixed pool — these DOM rows are created once and never removed.
+                // Build the fixed pool - these DOM rows are created once and never removed.
                 // Each rowObj.dataIndex tracks which stepData entry this row currently shows;
                 // renderRows() updates dataIndex and content in-place without touching the DOM.
                 var pi;
@@ -531,7 +531,7 @@
                             dataIndex  : -1   // -1 = no backing data (blank/disabled row)
                         };
 
-                        // Read dataIndex at click time — never stale because renderRows updates it
+                        // Read dataIndex at click time - never stale because renderRows updates it
                         removeBtn.onClick = function () {
                             var di = rowObj.dataIndex;
                             if (di < 0 || di >= stepData.length) { return; }
@@ -564,7 +564,7 @@
                     }
                 };
 
-                // Update pool row content in-place — no DOM mutations, no layout(true).
+                // Update pool row content in-place - no DOM mutations, no layout(true).
                 // Rows with no backing data are blanked and disabled.
                 renderRows = function () {
                     var k;
@@ -634,8 +634,8 @@
             okBtn.minimumSize = [80, 24];
 
             // ---- CSV Handler --------------------------------
-            // S4:       two-column CSV — col A = Title, col B = Body (format unchanged).
-            // S1/S2/S3: three-section CSV —
+            // S4:       two-column CSV - col A = Title, col B = Body (format unchanged).
+            // S1/S2/S3: three-section CSV -
             //   Row 1: scale identifier (S1, S2, or S3)
             //   Row 2: diagram title (populates Diagram Name field)
             //   Rows 3+: flowchart step texts
@@ -878,12 +878,12 @@
          *
          * Matching rules (number suffix is ignored):
          *
-         *   TextBox — name must:
+         *   TextBox - name must:
          *     • start with  "Object_TextBox"
          *     • contain the scale designator  "S1_", "S2_" or "S3_"
          *     e.g. "Object_TextBox_S3_01" matches when scale === "S3"
          *
-         *   Arrow — name must:
+         *   Arrow - name must:
          *     • start with  "Object_Arrow"
          *     e.g. "Object_Arrow_01" always matches
          *
@@ -943,7 +943,7 @@
             } catch (e) {}
             // Fallback: linear scan across doc.allParagraphStyles.
             // doc.paragraphStyles.item() can fail to resolve styles that sit
-            // inside a paragraph style GROUP — doc.allParagraphStyles is a flat
+            // inside a paragraph style GROUP - doc.allParagraphStyles is a flat
             // JS array that always includes grouped styles regardless of nesting.
             try {
                 var all = doc.allParagraphStyles;
@@ -986,7 +986,7 @@
          *
          * Steps:
          *  1. Set frame to a very tall height (text never overflows during read).
-         *  2. Inject full text — \r chars become InDesign paragraph breaks.
+         *  2. Inject full text - \r chars become InDesign paragraph breaks.
          *  3. Walk each paragraph; apply NumberedList or Bullets style where
          *     the line prefix rule matches; leave body paragraphs unstyled.
          *  4. Read last character baseline Y and trim frame to baseline + scaleOffset.
@@ -1029,8 +1029,8 @@
             //     Fix: granular per-paragraph try/catch with error logging.
 
             // Pass A: snapshot paragraph texts into a plain JS array.
-            // All subsequent passes read from this static array — never
-            // from the live DOM collection — so index drift cannot occur.
+            // All subsequent passes read from this static array - never
+            // from the live DOM collection - so index drift cannot occur.
             var paraCount  = 0;
             var paraTexts  = [];
             try {
@@ -1079,7 +1079,7 @@
             }
 
             // Reconstruct the full frame contents from cleaned texts joined by \r.
-            // A single contents assignment is atomic — no mid-write collection shifts.
+            // A single contents assignment is atomic - no mid-write collection shifts.
             newTB.contents = cleanedTexts.join("\r");
 
             // Pass C: apply paragraph styles to the now-stable paragraph collection.
@@ -1126,8 +1126,8 @@
          * for rotated objects: move() translates without distorting
          * the rotation or intrinsic shape.
          *
-         * Vertical offset uses arrowOffset — the gap between the template
-         * textbox bottom and template arrow bounding-box top — NOT the
+         * Vertical offset uses arrowOffset - the gap between the template
+         * textbox bottom and template arrow bounding-box top - NOT the
          * raw 13pt spec value. The 13pt spec measures to a visual reference
          * point on the arrow glyph, which due to −135° rotation does not
          * coincide with the geometricBounds top. Deriving the offset from
@@ -1194,7 +1194,7 @@
          * (or its master as fallback) and sets its text contents to
          * titleText.
          *
-         * Matching is by exact Layers-panel name — case-sensitive.
+         * Matching is by exact Layers-panel name - case-sensitive.
          * Silently skips if titleText is blank.
          */
         function setFlowchartTitle(workingPage, titleText) {
@@ -1234,7 +1234,7 @@
          *    bounding-box overhang on the arrow object
          *  - Arrow X: centred under text box
          *
-         * After the loop, the original template text box is removed —
+         * After the loop, the original template text box is removed -
          * it would otherwise remain as an invisible empty box overlapping
          * Box 1. The arrow template is left in place (it sits between
          * master-page items and is not duplicated at position 0).
