@@ -732,19 +732,46 @@
                         return;
                     }
 
+                    // Group consecutive same-(scale, title) columns onto shared pages
+                    var groups = [];
+                    if (diagrams.length > 0) {
+                        var curGroup = [diagrams[0]];
+                        for (var gi = 1; gi < diagrams.length; gi++) {
+                            var gPrev = diagrams[gi - 1], gCurr = diagrams[gi];
+                            if (gCurr.scale === gPrev.scale && gCurr.title === gPrev.title) {
+                                curGroup.push(gCurr);
+                            } else {
+                                groups.push(curGroup);
+                                curGroup = [gCurr];
+                            }
+                        }
+                        groups.push(curGroup);
+                    }
+
                     // Build confirm preview
-                    var preview = diagrams.length + " diagram" + (diagrams.length > 1 ? "s" : "") + " to build:\n";
-                    for (var di = 0; di < diagrams.length; di++) {
-                        var d = diagrams[di];
-                        preview += "\n  " + d.col + ". " + d.scale + "  \"" + d.title + "\"  — " + d.steps.length + " step" + (d.steps.length !== 1 ? "s" : "");
-                        if (d.csvMaster) { preview += "  (new page)"; }
+                    var preview = groups.length + " page" + (groups.length !== 1 ? "s" : "") + " to build:\n";
+                    for (var gi = 0; gi < groups.length; gi++) {
+                        var g = groups[gi];
+                        var pageNote = g[0].csvMaster ? "  (new page)" : "  (active page)";
+                        if (g.length === 1) {
+                            var d = g[0];
+                            preview += "\n  Page " + (gi + 1) + ": " + d.scale + "  \"" + d.title + "\"  — " +
+                                d.steps.length + " step" + (d.steps.length !== 1 ? "s" : "") + pageNote;
+                        } else {
+                            preview += "\n  Page " + (gi + 1) + ": " + g[0].scale + "  \"" + g[0].title +
+                                "\"  — " + g.length + " columns side-by-side" + pageNote;
+                            for (var ci = 0; ci < g.length; ci++) {
+                                preview += "\n    Col " + g[ci].col + ": " + g[ci].steps.length +
+                                    " step" + (g[ci].steps.length !== 1 ? "s" : "");
+                            }
+                        }
                     }
 
                     if (!confirm("Load from CSV?\n\n" + preview)) { return; }
 
-                    // Page creation is deferred to the main execution block —
-                    // InDesign forbids doc modification while a modal dialog is open.
-                    result = { diagrams: diagrams };
+                    // Page creation deferred to main execution block (InDesign forbids
+                    // doc modification while a modal dialog is active).
+                    result = { groups: groups };
                     dlg.close();
                 }
                 } catch (csvErr) {
@@ -1259,7 +1286,7 @@
             var tbGeo       = templateData.textBox.geo;
             var arGeo       = templateData.arrow.geo;
 
-            var boxX        = tbGeo.x;
+            var boxX        = (typeof result.xOffset === "number") ? result.xOffset : tbGeo.x;
             var boxWidth    = tbGeo.w;
             var prevBottom  = null;
             var log         = ["scaleNum=" + scaleNum + "  styles: NumberedList_S" + scaleNum + " / Bullets_S" + scaleNum];
@@ -1335,42 +1362,42 @@
                 }
             }
 
-            // Remove the original template text box. detach() breaks the master
-            // association first so that remove() permanently deletes the item
-            // rather than restoring the master ghost.
-            try {
-                if (tbTemplate.parentPage === workingPage) {
-                    try { tbTemplate.detach(); } catch (e2) {}
-                    tbTemplate.remove();
-                    log.push("\n(Template textbox removed)");
-                } else {
-                    var tbOverride = tbTemplate.override(workingPage);
-                    if (tbOverride) {
-                        try { tbOverride.detach(); } catch (e2) {}
-                        tbOverride.remove();
+            // Remove the original template text box and arrow. Skipped for all but
+            // the last column in a multi-column group (the same template seeds every column).
+            if (!result.skipTemplateCleanup) {
+                try {
+                    if (tbTemplate.parentPage === workingPage) {
+                        try { tbTemplate.detach(); } catch (e2) {}
+                        tbTemplate.remove();
+                        log.push("\n(Template textbox removed)");
+                    } else {
+                        var tbOverride = tbTemplate.override(workingPage);
+                        if (tbOverride) {
+                            try { tbOverride.detach(); } catch (e2) {}
+                            tbOverride.remove();
+                        }
+                        log.push("\n(Template textbox master item removed)");
                     }
-                    log.push("\n(Template textbox master item removed)");
+                } catch (e) {
+                    log.push("\n(Warning: could not remove template textbox: " + e.message + ")");
                 }
-            } catch (e) {
-                log.push("\n(Warning: could not remove template textbox: " + e.message + ")");
-            }
 
-            // Same treatment for the template arrow.
-            try {
-                if (arTemplate.parentPage === workingPage) {
-                    try { arTemplate.detach(); } catch (e2) {}
-                    arTemplate.remove();
-                    log.push("(Template arrow removed)");
-                } else {
-                    var arOverride = arTemplate.override(workingPage);
-                    if (arOverride) {
-                        try { arOverride.detach(); } catch (e2) {}
-                        arOverride.remove();
+                try {
+                    if (arTemplate.parentPage === workingPage) {
+                        try { arTemplate.detach(); } catch (e2) {}
+                        arTemplate.remove();
+                        log.push("(Template arrow removed)");
+                    } else {
+                        var arOverride = arTemplate.override(workingPage);
+                        if (arOverride) {
+                            try { arOverride.detach(); } catch (e2) {}
+                            arOverride.remove();
+                        }
+                        log.push("(Template arrow master item removed)");
                     }
-                    log.push("(Template arrow master item removed)");
+                } catch (e) {
+                    log.push("(Warning: could not remove template arrow: " + e.message + ")");
                 }
-            } catch (e) {
-                log.push("(Warning: could not remove template arrow: " + e.message + ")");
             }
 
             return log;
@@ -1585,55 +1612,64 @@
 
             if (!docError) {
 
-                if (result.diagrams) {
+                if (result.groups) {
                     // ---- Multi-diagram CSV path ----
                     // Page creation happens here (after dialog closed) because InDesign
                     // forbids document modification while a modal dialog is active.
                     var builtCount  = 0;
                     var buildErrors = [];
 
-                    for (var di = 0; di < result.diagrams.length; di++) {
-                        var spec     = result.diagrams[di];
-                        var specPage = null;
+                    for (var gi = 0; gi < result.groups.length; gi++) {
+                        var group     = result.groups[gi];
+                        var g0        = group[0];
+                        var groupPage = null;
 
-                        if (spec.csvMaster) {
+                        if (g0.csvMaster) {
                             try {
-                                var newSpecPage = doc.pages.add(LocationOptions.AT_END);
-                                newSpecPage.appliedMaster = spec.csvMaster;
-                                specPage = newSpecPage;
+                                var newGP = doc.pages.add(LocationOptions.AT_END);
+                                newGP.appliedMaster = g0.csvMaster;
+                                groupPage = newGP;
                             } catch (e) {
-                                buildErrors.push("Col " + spec.col + ": could not create page — " + e.message);
+                                buildErrors.push("Page " + (gi + 1) + ": could not create page — " + e.message);
                                 break;
                             }
                         } else {
-                            specPage = activePage;
+                            groupPage = activePage;
                         }
 
-                        spec.workingPage = specPage;
+                        try { groupPage.parent.overrideAllMasterPageItems(); } catch (e) {}
 
-                        try { specPage.parent.overrideAllMasterPageItems(); } catch (e) {}
-
-                        var specTpl = detectTemplateObjects(doc, specPage, spec.scale);
-                        if (!specTpl) {
-                            buildErrors.push("Col " + spec.col + ": template objects not found for scale " + spec.scale);
+                        var groupTpl = detectTemplateObjects(doc, groupPage, g0.scale);
+                        if (!groupTpl) {
+                            buildErrors.push("Page " + (gi + 1) + ": template not found for scale " + g0.scale);
                             break;
                         }
 
-                        setFlowchartTitle(specPage, spec.title);
-                        executePhase3(doc, specPage, spec, specTpl);
+                        setFlowchartTitle(groupPage, g0.title);
+
+                        var colW  = groupTpl.textBox.geo.w;
+                        var colX0 = groupTpl.textBox.geo.x;
+
+                        for (var ci = 0; ci < group.length; ci++) {
+                            var colSpec = group[ci];
+                            colSpec.workingPage         = groupPage;
+                            colSpec.xOffset             = colX0 + ci * (colW + 13);
+                            colSpec.skipTemplateCleanup = (ci < group.length - 1);
+                            executePhase3(doc, groupPage, colSpec, groupTpl);
+                        }
                         builtCount++;
                     }
 
                     if (buildErrors.length > 0) {
                         alert(
                             "CSV build stopped early.\n\n" +
-                            "Built: " + builtCount + " of " + result.diagrams.length + " diagrams.\n\n" +
+                            "Built: " + builtCount + " of " + result.groups.length + " pages.\n\n" +
                             "Error:\n" + buildErrors.join("\n")
                         );
                     } else {
                         alert(
                             "CSV build complete.\n\n" +
-                            builtCount + " diagram" + (builtCount !== 1 ? "s" : "") + " built successfully."
+                            builtCount + " page" + (builtCount !== 1 ? "s" : "") + " built successfully."
                         );
                     }
 
