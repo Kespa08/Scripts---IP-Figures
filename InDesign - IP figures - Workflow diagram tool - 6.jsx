@@ -682,6 +682,49 @@
                         var colScale = (grid[0][c] || "").replace(/[\r\n\s]/g, "");
                         var colTitle = (grid.length > 1 ? (grid[1][c] || "") : "").replace(/[\r\n]/g, "");
 
+                        if (colScale === "S4") {
+                            var rScale = c + 1 < numCols ? (grid[0][c + 1] || "").replace(/[\r\n\s]/g, "") : "";
+                            var rTitle = c + 1 < numCols && grid.length > 1 ? (grid[1][c + 1] || "").replace(/[\r\n]/g, "") : "";
+                            if (c + 1 >= numCols || rScale !== "S4") {
+                                invalids.push({ col: colNum, reason: "S4 column must be immediately followed by another S4 column" });
+                                continue;
+                            }
+                            if (rTitle !== colTitle) {
+                                invalids.push({ col: colNum, reason: "S4 pair TextHeaders must match (col " + colNum + ": \"" + colTitle + "\", col " + (colNum + 1) + ": \"" + rTitle + "\")" });
+                                c++;
+                                continue;
+                            }
+                            var s4T1 = grid.length > 2 ? (grid[2][c]     || "") : "";
+                            var s4T2 = grid.length > 2 ? (grid[2][c + 1] || "") : "";
+                            var s4Steps = [];
+                            for (var sr = 3; sr < grid.length; sr++) {
+                                var tCell = grid[sr][c]     || "";
+                                var bCell = grid[sr][c + 1] || "";
+                                if (tCell.replace(/[\r\n\s]/g, "") !== "" || bCell.replace(/[\r\n\s]/g, "") !== "") {
+                                    s4Steps.push({ title: tCell, body: bCell });
+                                }
+                            }
+                            if (s4Steps.length === 0) {
+                                invalids.push({ col: colNum, reason: "S4 pair has no steps (rows 4+ are all blank)" });
+                                c++;
+                                continue;
+                            }
+                            var s4Master = null;
+                            if (currentScale === "S4" && !usedActivePage) {
+                                usedActivePage = true;
+                            } else {
+                                s4Master = findMasterForScale("S4");
+                                if (!s4Master) {
+                                    invalids.push({ col: colNum, reason: "no master spread found for scale S4" });
+                                    c++;
+                                    continue;
+                                }
+                            }
+                            diagrams.push({ col: colNum, scale: "S4", title: colTitle, s4T1: s4T1, s4T2: s4T2, steps: s4Steps, csvMaster: s4Master });
+                            c++;
+                            continue;
+                        }
+
                         // Collect non-blank step cells (rows 2+)
                         var colSteps = [];
                         for (var sr = 2; sr < grid.length; sr++) {
@@ -690,7 +733,7 @@
                         }
 
                         if (!validScales[colScale]) {
-                            invalids.push({ col: colNum, reason: "\"" + colScale + "\" is not a valid scale (must be S1, S2, or S3)" });
+                            invalids.push({ col: colNum, reason: "\"" + colScale + "\" is not a valid scale (must be S1, S2, S3, or S4)" });
                             continue;
                         }
                         if (colSteps.length === 0) {
@@ -738,7 +781,8 @@
                         var curGroup = [diagrams[0]];
                         for (var gi = 1; gi < diagrams.length; gi++) {
                             var gPrev = diagrams[gi - 1], gCurr = diagrams[gi];
-                            if (gCurr.scale === gPrev.scale && gCurr.title === gPrev.title) {
+                            if (gCurr.scale !== "S4" && gPrev.scale !== "S4" &&
+                                    gCurr.scale === gPrev.scale && gCurr.title === gPrev.title) {
                                 curGroup.push(gCurr);
                             } else {
                                 groups.push(curGroup);
@@ -1646,6 +1690,21 @@
                         }
 
                         setFlowchartTitle(groupPage, g0.title);
+
+                        if (g0.scale === "S4") {
+                            if (g0.s4T1 && g0.s4T1.replace(/\s/g, "") !== "") {
+                                var t1Item = findItem(groupPage, function (item) { return item.name === "Text_T1"; });
+                                if (t1Item) { try { t1Item.contents = g0.s4T1; } catch (e) {} }
+                            }
+                            if (g0.s4T2 && g0.s4T2.replace(/\s/g, "") !== "") {
+                                var t2Item = findItem(groupPage, function (item) { return item.name === "Text_T2"; });
+                                if (t2Item) { try { t2Item.contents = g0.s4T2; } catch (e) {} }
+                            }
+                            var s4Spec = { scale: "S4", steps: g0.steps, workingPage: groupPage };
+                            executePhase3(doc, groupPage, s4Spec, groupTpl);
+                            builtCount++;
+                            continue;
+                        }
 
                         var colW  = groupTpl.textBox.geo.w;
                         var colX0 = groupTpl.textBox.geo.x;
