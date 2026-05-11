@@ -755,13 +755,12 @@
                         var report = "CSV validation failed — no diagrams will be built.\n";
                         if (diagrams.length > 0) {
                             report += "\nValid columns (" + diagrams.length + "):";
-                            var showMax = 20;
-                            var showCount = Math.min(diagrams.length, showMax);
-                            for (var vi = 0; vi < showCount; vi++) {
+                            for (var vi = 0; vi < diagrams.length; vi++) {
+                                if (vi === 20) {
+                                    report += "\n  +" + (diagrams.length - 20) + " valid columns not shown";
+                                    break;
+                                }
                                 report += "\n  Col " + diagrams[vi].col + " — " + diagrams[vi].scale + " \"" + diagrams[vi].title + "\" (" + diagrams[vi].steps.length + " steps)";
-                            }
-                            if (diagrams.length > showMax) {
-                                report += "\n  +" + (diagrams.length - showMax) + " valid columns not shown";
                             }
                         }
                         report += "\n\nInvalid columns (" + invalids.length + "):";
