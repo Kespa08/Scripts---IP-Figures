@@ -752,7 +752,7 @@
 
                     // All-or-nothing gate
                     if (invalids.length > 0) {
-                        var report = "CSV validation failed — no diagrams will be built.\n";
+                        var report = "CSV validation failed - no diagrams will be built.\n";
                         if (diagrams.length > 0) {
                             report += "\nValid columns (" + diagrams.length + "):";
                             for (var vi = 0; vi < diagrams.length; vi++) {
@@ -760,12 +760,12 @@
                                     report += "\n  +" + (diagrams.length - 20) + " valid columns not shown";
                                     break;
                                 }
-                                report += "\n  Col " + diagrams[vi].col + " — " + diagrams[vi].scale + " \"" + diagrams[vi].title + "\" (" + diagrams[vi].steps.length + " steps)";
+                                report += "\n  Col " + diagrams[vi].col + " - " + diagrams[vi].scale + " \"" + diagrams[vi].title + "\" (" + diagrams[vi].steps.length + " steps)";
                             }
                         }
                         report += "\n\nInvalid columns (" + invalids.length + "):";
                         for (var ii = 0; ii < invalids.length; ii++) {
-                            report += "\n  Col " + invalids[ii].col + " — " + invalids[ii].reason;
+                            report += "\n  Col " + invalids[ii].col + " - " + invalids[ii].reason;
                         }
                         alert(report);
                         return;
@@ -799,11 +799,11 @@
                         var pageNote = g[0].csvMaster ? "  (new page)" : "  (active page)";
                         if (g.length === 1) {
                             var d = g[0];
-                            preview += "\n  Page " + (gi + 1) + ": " + d.scale + "  \"" + d.title + "\"  — " +
+                            preview += "\n  Page " + (gi + 1) + ": " + d.scale + "  \"" + d.title + "\"  - " +
                                 d.steps.length + " step" + (d.steps.length !== 1 ? "s" : "") + pageNote;
                         } else {
                             preview += "\n  Page " + (gi + 1) + ": " + g[0].scale + "  \"" + g[0].title +
-                                "\"  — " + g.length + " columns side-by-side" + pageNote;
+                                "\"  - " + g.length + " columns side-by-side" + pageNote;
                             for (var ci = 0; ci < g.length; ci++) {
                                 preview += "\n    Col " + g[ci].col + ": " + g[ci].steps.length +
                                     " step" + (g[ci].steps.length !== 1 ? "s" : "");
@@ -1673,7 +1673,7 @@
                                 newGP.appliedMaster = g0.csvMaster;
                                 groupPage = newGP;
                             } catch (e) {
-                                buildErrors.push("Page " + (gi + 1) + ": could not create page — " + e.message);
+                                buildErrors.push("Page " + (gi + 1) + ": could not create page - " + e.message);
                                 break;
                             }
                         } else {
