@@ -791,6 +791,10 @@
                     // Build confirm preview
                     var preview = groups.length + " page" + (groups.length !== 1 ? "s" : "") + " to build:\n";
                     for (var gi = 0; gi < groups.length; gi++) {
+                        if (gi === 20) {
+                            preview += "\n  +" + (groups.length - 20) + " more pages not shown";
+                            break;
+                        }
                         var g = groups[gi];
                         var pageNote = g[0].csvMaster ? "  (new page)" : "  (active page)";
                         if (g.length === 1) {
