@@ -672,11 +672,11 @@
                     for (var c = 0; c < numCols; c++) {
                         var colNum   = c + 1;
                         var colScale = (grid[0][c] || "").replace(/[\r\n\s]/g, "");
-                        var colTitle = (grid.length > 1 ? (grid[1][c] || "") : "").replace(/[\r\n]/g, "").trim();
+                        var colTitle = (grid.length > 1 ? (grid[1][c] || "") : "").replace(/[\r\n]/g, "").replace(/^\s+|\s+$/g, "");
 
                         if (colScale === "S4") {
                             var rScale = c + 1 < numCols ? (grid[0][c + 1] || "").replace(/[\r\n\s]/g, "") : "";
-                            var rTitle = c + 1 < numCols && grid.length > 1 ? (grid[1][c + 1] || "").replace(/[\r\n]/g, "").trim() : "";
+                            var rTitle = c + 1 < numCols && grid.length > 1 ? (grid[1][c + 1] || "").replace(/[\r\n]/g, "").replace(/^\s+|\s+$/g, "") : "";
                             if (c + 1 >= numCols || rScale !== "S4") {
                                 invalids.push({ col: colNum, reason: "S4 column must be immediately followed by another S4 column" });
                                 continue;
