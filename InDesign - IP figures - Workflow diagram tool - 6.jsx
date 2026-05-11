@@ -1683,14 +1683,10 @@
                         setFlowchartTitle(groupPage, g0.title);
 
                         if (g0.scale === "S4") {
-                            if (g0.s4T1 && g0.s4T1.replace(/\s/g, "") !== "") {
-                                var t1Item = findItem(groupPage, function (item) { return item.name === "Text_T1"; });
-                                if (t1Item) { try { t1Item.contents = g0.s4T1; } catch (e) {} }
-                            }
-                            if (g0.s4T2 && g0.s4T2.replace(/\s/g, "") !== "") {
-                                var t2Item = findItem(groupPage, function (item) { return item.name === "Text_T2"; });
-                                if (t2Item) { try { t2Item.contents = g0.s4T2; } catch (e) {} }
-                            }
+                            var t1Item = findItem(groupPage, function (item) { return item.name === "Text_T1"; });
+                            if (t1Item) { try { t1Item.contents = g0.s4T1 || ""; } catch (e) {} }
+                            var t2Item = findItem(groupPage, function (item) { return item.name === "Text_T2"; });
+                            if (t2Item) { try { t2Item.contents = g0.s4T2 || ""; } catch (e) {} }
                             var s4Spec = { scale: "S4", steps: g0.steps, workingPage: groupPage };
                             executePhase3(doc, groupPage, s4Spec, groupTpl);
                             builtCount++;
