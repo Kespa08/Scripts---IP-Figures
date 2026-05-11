@@ -799,7 +799,7 @@
                         var pageNote = g[0].csvMaster ? "  (new page)" : "  (active page)";
                         if (g.length === 1) {
                             var d = g[0];
-                            preview += "\n  Page " + (gi + 1) + ": " + d.scale + "  \"" + d.title + "\"  - " +
+                            preview += "\n  Page " + (gi + 1) + ": " + d.scale + "  \"" + d.title + "\" - " +
                                 d.steps.length + " step" + (d.steps.length !== 1 ? "s" : "") + pageNote;
                         } else {
                             preview += "\n  Page " + (gi + 1) + ": " + g[0].scale + "  \"" + g[0].title +
