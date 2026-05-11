@@ -647,15 +647,7 @@
                 );
                 if (!file) { return; }
 
-                if (currentScale === "S4") {
-                    var s4Steps = parseCSVS4(file);
-                    if (s4Steps.length === 0) {
-                        alert("CSV contained no readable steps.\nExpected two columns: Title, Body.");
-                        return;
-                    }
-                    populateRowsS4(s4Steps);
-                } else {
-                    var grid = parseCSVGrid(file);
+                var grid = parseCSVGrid(file);
 
                     if (grid.length === 0 || grid[0].length === 0) {
                         alert("The selected CSV file is empty or contains no readable data.");
@@ -680,11 +672,11 @@
                     for (var c = 0; c < numCols; c++) {
                         var colNum   = c + 1;
                         var colScale = (grid[0][c] || "").replace(/[\r\n\s]/g, "");
-                        var colTitle = (grid.length > 1 ? (grid[1][c] || "") : "").replace(/[\r\n]/g, "");
+                        var colTitle = (grid.length > 1 ? (grid[1][c] || "") : "").replace(/[\r\n]/g, "").trim();
 
                         if (colScale === "S4") {
                             var rScale = c + 1 < numCols ? (grid[0][c + 1] || "").replace(/[\r\n\s]/g, "") : "";
-                            var rTitle = c + 1 < numCols && grid.length > 1 ? (grid[1][c + 1] || "").replace(/[\r\n]/g, "") : "";
+                            var rTitle = c + 1 < numCols && grid.length > 1 ? (grid[1][c + 1] || "").replace(/[\r\n]/g, "").trim() : "";
                             if (c + 1 >= numCols || rScale !== "S4") {
                                 invalids.push({ col: colNum, reason: "S4 column must be immediately followed by another S4 column" });
                                 continue;
@@ -817,7 +809,6 @@
                     // doc modification while a modal dialog is active).
                     result = { groups: groups };
                     dlg.close();
-                }
                 } catch (csvErr) {
                     alert("CSV load failed.\n\nError: " + csvErr.message + "\nLine: " + csvErr.line);
                 }
