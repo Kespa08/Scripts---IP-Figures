@@ -647,15 +647,7 @@
                 );
                 if (!file) { return; }
 
-                if (currentScale === "S4") {
-                    var s4Steps = parseCSVS4(file);
-                    if (s4Steps.length === 0) {
-                        alert("CSV contained no readable steps.\nExpected two columns: Title, Body.");
-                        return;
-                    }
-                    populateRowsS4(s4Steps);
-                } else {
-                    var grid = parseCSVGrid(file);
+                var grid = parseCSVGrid(file);
 
                     if (grid.length === 0 || grid[0].length === 0) {
                         alert("The selected CSV file is empty or contains no readable data.");
@@ -680,7 +672,50 @@
                     for (var c = 0; c < numCols; c++) {
                         var colNum   = c + 1;
                         var colScale = (grid[0][c] || "").replace(/[\r\n\s]/g, "");
-                        var colTitle = (grid.length > 1 ? (grid[1][c] || "") : "").replace(/[\r\n]/g, "");
+                        var colTitle = (grid.length > 1 ? (grid[1][c] || "") : "").replace(/[\r\n]/g, "").replace(/^\s+|\s+$/g, "");
+
+                        if (colScale === "S4") {
+                            var rScale = c + 1 < numCols ? (grid[0][c + 1] || "").replace(/[\r\n\s]/g, "") : "";
+                            var rTitle = c + 1 < numCols && grid.length > 1 ? (grid[1][c + 1] || "").replace(/[\r\n]/g, "").replace(/^\s+|\s+$/g, "") : "";
+                            if (c + 1 >= numCols || rScale !== "S4") {
+                                invalids.push({ col: colNum, reason: "S4 column must be immediately followed by another S4 column" });
+                                continue;
+                            }
+                            if (rTitle !== colTitle) {
+                                invalids.push({ col: colNum, reason: "S4 pair TextHeaders must match (col " + colNum + ": \"" + colTitle + "\", col " + (colNum + 1) + ": \"" + rTitle + "\")" });
+                                c++;
+                                continue;
+                            }
+                            var s4T1 = grid.length > 2 ? (grid[2][c]     || "") : "";
+                            var s4T2 = grid.length > 2 ? (grid[2][c + 1] || "") : "";
+                            var s4Steps = [];
+                            for (var sr = 3; sr < grid.length; sr++) {
+                                var tCell = grid[sr][c]     || "";
+                                var bCell = grid[sr][c + 1] || "";
+                                if (tCell.replace(/[\r\n\s]/g, "") !== "" || bCell.replace(/[\r\n\s]/g, "") !== "") {
+                                    s4Steps.push({ title: tCell, body: bCell });
+                                }
+                            }
+                            if (s4Steps.length === 0) {
+                                invalids.push({ col: colNum, reason: "S4 pair has no steps (rows 4+ are all blank)" });
+                                c++;
+                                continue;
+                            }
+                            var s4Master = null;
+                            if (currentScale === "S4" && !usedActivePage) {
+                                usedActivePage = true;
+                            } else {
+                                s4Master = findMasterForScale("S4");
+                                if (!s4Master) {
+                                    invalids.push({ col: colNum, reason: "no master spread found for scale S4" });
+                                    c++;
+                                    continue;
+                                }
+                            }
+                            diagrams.push({ col: colNum, scale: "S4", title: colTitle, s4T1: s4T1, s4T2: s4T2, steps: s4Steps, csvMaster: s4Master });
+                            c++;
+                            continue;
+                        }
 
                         // Collect non-blank step cells (rows 2+)
                         var colSteps = [];
@@ -690,7 +725,7 @@
                         }
 
                         if (!validScales[colScale]) {
-                            invalids.push({ col: colNum, reason: "\"" + colScale + "\" is not a valid scale (must be S1, S2, or S3)" });
+                            invalids.push({ col: colNum, reason: "\"" + colScale + "\" is not a valid scale (must be S1, S2, S3, or S4)" });
                             continue;
                         }
                         if (colSteps.length === 0) {
@@ -732,6 +767,23 @@
                         return;
                     }
 
+                    // Group consecutive same-(scale, title) columns onto shared pages
+                    var groups = [];
+                    if (diagrams.length > 0) {
+                        var curGroup = [diagrams[0]];
+                        for (var gi = 1; gi < diagrams.length; gi++) {
+                            var gPrev = diagrams[gi - 1], gCurr = diagrams[gi];
+                            if (gCurr.scale !== "S4" && gPrev.scale !== "S4" &&
+                                    gCurr.scale === gPrev.scale && gCurr.title === gPrev.title) {
+                                curGroup.push(gCurr);
+                            } else {
+                                groups.push(curGroup);
+                                curGroup = [gCurr];
+                            }
+                        }
+                        groups.push(curGroup);
+                    }
+
                     // Build confirm preview
                     var preview = diagrams.length + " diagram" + (diagrams.length > 1 ? "s" : "") + " to build:\n";
                     for (var di = 0; di < diagrams.length; di++) {
@@ -746,7 +798,6 @@
                     // InDesign forbids doc modification while a modal dialog is open.
                     result = { diagrams: diagrams };
                     dlg.close();
-                }
                 } catch (csvErr) {
                     alert("CSV load failed.\n\nError: " + csvErr.message + "\nLine: " + csvErr.line);
                 }
@@ -1259,7 +1310,7 @@
             var tbGeo       = templateData.textBox.geo;
             var arGeo       = templateData.arrow.geo;
 
-            var boxX        = tbGeo.x;
+            var boxX        = (typeof result.xOffset === "number") ? result.xOffset : tbGeo.x;
             var boxWidth    = tbGeo.w;
             var prevBottom  = null;
             var log         = ["scaleNum=" + scaleNum + "  styles: NumberedList_S" + scaleNum + " / Bullets_S" + scaleNum];
@@ -1335,42 +1386,42 @@
                 }
             }
 
-            // Remove the original template text box. detach() breaks the master
-            // association first so that remove() permanently deletes the item
-            // rather than restoring the master ghost.
-            try {
-                if (tbTemplate.parentPage === workingPage) {
-                    try { tbTemplate.detach(); } catch (e2) {}
-                    tbTemplate.remove();
-                    log.push("\n(Template textbox removed)");
-                } else {
-                    var tbOverride = tbTemplate.override(workingPage);
-                    if (tbOverride) {
-                        try { tbOverride.detach(); } catch (e2) {}
-                        tbOverride.remove();
+            // Remove the original template text box and arrow. Skipped for all but
+            // the last column in a multi-column group (the same template seeds every column).
+            if (!result.skipTemplateCleanup) {
+                try {
+                    if (tbTemplate.parentPage === workingPage) {
+                        try { tbTemplate.detach(); } catch (e2) {}
+                        tbTemplate.remove();
+                        log.push("\n(Template textbox removed)");
+                    } else {
+                        var tbOverride = tbTemplate.override(workingPage);
+                        if (tbOverride) {
+                            try { tbOverride.detach(); } catch (e2) {}
+                            tbOverride.remove();
+                        }
+                        log.push("\n(Template textbox master item removed)");
                     }
-                    log.push("\n(Template textbox master item removed)");
+                } catch (e) {
+                    log.push("\n(Warning: could not remove template textbox: " + e.message + ")");
                 }
-            } catch (e) {
-                log.push("\n(Warning: could not remove template textbox: " + e.message + ")");
-            }
 
-            // Same treatment for the template arrow.
-            try {
-                if (arTemplate.parentPage === workingPage) {
-                    try { arTemplate.detach(); } catch (e2) {}
-                    arTemplate.remove();
-                    log.push("(Template arrow removed)");
-                } else {
-                    var arOverride = arTemplate.override(workingPage);
-                    if (arOverride) {
-                        try { arOverride.detach(); } catch (e2) {}
-                        arOverride.remove();
+                try {
+                    if (arTemplate.parentPage === workingPage) {
+                        try { arTemplate.detach(); } catch (e2) {}
+                        arTemplate.remove();
+                        log.push("(Template arrow removed)");
+                    } else {
+                        var arOverride = arTemplate.override(workingPage);
+                        if (arOverride) {
+                            try { arOverride.detach(); } catch (e2) {}
+                            arOverride.remove();
+                        }
+                        log.push("(Template arrow master item removed)");
                     }
-                    log.push("(Template arrow master item removed)");
+                } catch (e) {
+                    log.push("(Warning: could not remove template arrow: " + e.message + ")");
                 }
-            } catch (e) {
-                log.push("(Warning: could not remove template arrow: " + e.message + ")");
             }
 
             return log;
@@ -1585,55 +1636,75 @@
 
             if (!docError) {
 
-                if (result.diagrams) {
+                if (result.groups) {
                     // ---- Multi-diagram CSV path ----
                     // Page creation happens here (after dialog closed) because InDesign
                     // forbids document modification while a modal dialog is active.
                     var builtCount  = 0;
                     var buildErrors = [];
 
-                    for (var di = 0; di < result.diagrams.length; di++) {
-                        var spec     = result.diagrams[di];
-                        var specPage = null;
+                    for (var gi = 0; gi < result.groups.length; gi++) {
+                        var group     = result.groups[gi];
+                        var g0        = group[0];
+                        var groupPage = null;
 
-                        if (spec.csvMaster) {
+                        if (g0.csvMaster) {
                             try {
-                                var newSpecPage = doc.pages.add(LocationOptions.AT_END);
-                                newSpecPage.appliedMaster = spec.csvMaster;
-                                specPage = newSpecPage;
+                                var newGP = doc.pages.add(LocationOptions.AT_END);
+                                newGP.appliedMaster = g0.csvMaster;
+                                groupPage = newGP;
                             } catch (e) {
                                 buildErrors.push("Col " + spec.col + ": could not create page - " + e.message);
                                 break;
                             }
                         } else {
-                            specPage = activePage;
+                            groupPage = activePage;
                         }
 
-                        spec.workingPage = specPage;
+                        try { groupPage.parent.overrideAllMasterPageItems(); } catch (e) {}
 
-                        try { specPage.parent.overrideAllMasterPageItems(); } catch (e) {}
-
-                        var specTpl = detectTemplateObjects(doc, specPage, spec.scale);
-                        if (!specTpl) {
-                            buildErrors.push("Col " + spec.col + ": template objects not found for scale " + spec.scale);
+                        var groupTpl = detectTemplateObjects(doc, groupPage, g0.scale);
+                        if (!groupTpl) {
+                            buildErrors.push("Page " + (gi + 1) + ": template not found for scale " + g0.scale);
                             break;
                         }
 
-                        setFlowchartTitle(specPage, spec.title);
-                        executePhase3(doc, specPage, spec, specTpl);
+                        setFlowchartTitle(groupPage, g0.title);
+
+                        if (g0.scale === "S4") {
+                            var t1Item = findItem(groupPage, function (item) { return item.name === "Text_T1"; });
+                            if (t1Item) { try { t1Item.contents = g0.s4T1 || ""; } catch (e) {} }
+                            var t2Item = findItem(groupPage, function (item) { return item.name === "Text_T2"; });
+                            if (t2Item) { try { t2Item.contents = g0.s4T2 || ""; } catch (e) {} }
+                            var s4Spec = { scale: "S4", steps: g0.steps, workingPage: groupPage };
+                            executePhase3(doc, groupPage, s4Spec, groupTpl);
+                            builtCount++;
+                            continue;
+                        }
+
+                        var colW  = groupTpl.textBox.geo.w;
+                        var colX0 = groupTpl.textBox.geo.x;
+
+                        for (var ci = 0; ci < group.length; ci++) {
+                            var colSpec = group[ci];
+                            colSpec.workingPage         = groupPage;
+                            colSpec.xOffset             = colX0 + ci * (colW + 13);
+                            colSpec.skipTemplateCleanup = (ci < group.length - 1);
+                            executePhase3(doc, groupPage, colSpec, groupTpl);
+                        }
                         builtCount++;
                     }
 
                     if (buildErrors.length > 0) {
                         alert(
                             "CSV build stopped early.\n\n" +
-                            "Built: " + builtCount + " of " + result.diagrams.length + " diagrams.\n\n" +
+                            "Built: " + builtCount + " of " + result.groups.length + " pages.\n\n" +
                             "Error:\n" + buildErrors.join("\n")
                         );
                     } else {
                         alert(
                             "CSV build complete.\n\n" +
-                            builtCount + " diagram" + (builtCount !== 1 ? "s" : "") + " built successfully."
+                            builtCount + " page" + (builtCount !== 1 ? "s" : "") + " built successfully."
                         );
                     }
 
