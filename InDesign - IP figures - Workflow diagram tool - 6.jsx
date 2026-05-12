@@ -756,10 +756,6 @@
                         if (diagrams.length > 0) {
                             report += "\nValid columns (" + diagrams.length + "):";
                             for (var vi = 0; vi < diagrams.length; vi++) {
-                                if (vi === 20) {
-                                    report += "\n  +" + (diagrams.length - 20) + " valid columns not shown";
-                                    break;
-                                }
                                 report += "\n  Col " + diagrams[vi].col + " - " + diagrams[vi].scale + " \"" + diagrams[vi].title + "\" (" + diagrams[vi].steps.length + " steps)";
                             }
                         }
@@ -789,33 +785,18 @@
                     }
 
                     // Build confirm preview
-                    var preview = groups.length + " page" + (groups.length !== 1 ? "s" : "") + " to build:\n";
-                    for (var gi = 0; gi < groups.length; gi++) {
-                        if (gi === 20) {
-                            preview += "\n  +" + (groups.length - 20) + " more pages not shown";
-                            break;
-                        }
-                        var g = groups[gi];
-                        var pageNote = g[0].csvMaster ? "  (new page)" : "  (active page)";
-                        if (g.length === 1) {
-                            var d = g[0];
-                            preview += "\n  Page " + (gi + 1) + ": " + d.scale + "  \"" + d.title + "\" - " +
-                                d.steps.length + " step" + (d.steps.length !== 1 ? "s" : "") + pageNote;
-                        } else {
-                            preview += "\n  Page " + (gi + 1) + ": " + g[0].scale + "  \"" + g[0].title +
-                                "\"  - " + g.length + " columns side-by-side" + pageNote;
-                            for (var ci = 0; ci < g.length; ci++) {
-                                preview += "\n    Col " + g[ci].col + ": " + g[ci].steps.length +
-                                    " step" + (g[ci].steps.length !== 1 ? "s" : "");
-                            }
-                        }
+                    var preview = diagrams.length + " diagram" + (diagrams.length > 1 ? "s" : "") + " to build:\n";
+                    for (var di = 0; di < diagrams.length; di++) {
+                        var d = diagrams[di];
+                        preview += "\n  " + d.col + ". " + d.scale + "  \"" + d.title + "\"  - " + d.steps.length + " step" + (d.steps.length !== 1 ? "s" : "");
+                        if (d.csvMaster) { preview += "  (new page)"; }
                     }
 
                     if (!confirm("Load from CSV?\n\n" + preview)) { return; }
 
-                    // Page creation deferred to main execution block (InDesign forbids
-                    // doc modification while a modal dialog is active).
-                    result = { groups: groups };
+                    // Page creation is deferred to the main execution block -
+                    // InDesign forbids doc modification while a modal dialog is open.
+                    result = { diagrams: diagrams };
                     dlg.close();
                 } catch (csvErr) {
                     alert("CSV load failed.\n\nError: " + csvErr.message + "\nLine: " + csvErr.line);
@@ -1673,7 +1654,7 @@
                                 newGP.appliedMaster = g0.csvMaster;
                                 groupPage = newGP;
                             } catch (e) {
-                                buildErrors.push("Page " + (gi + 1) + ": could not create page - " + e.message);
+                                buildErrors.push("Col " + spec.col + ": could not create page - " + e.message);
                                 break;
                             }
                         } else {
