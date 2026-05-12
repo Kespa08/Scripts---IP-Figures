@@ -4,6 +4,20 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
+## 0. Project context
+
+Single-file ExtendScript tool for Adobe InDesign.
+File: `InDesign - IP figures - Workflow diagram tool - 6.jsx`
+
+## 0a. Runtime constraints (ExtendScript = ES3)
+
+- No `.trim()` → use `.replace(/^\s+|\s+$/g, "")`
+- No `const` / `let` → use `var`
+- No arrow functions → use `function` expressions
+- No template literals → use string concatenation
+- No `Array.forEach`, `.map`, `.filter` → use `for` loops
+- Prefer explicit loop-with-`break` over `Math.min` for index caps
+
 ## 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
